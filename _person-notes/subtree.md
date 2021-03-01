@@ -36,7 +36,7 @@
 
 4. 渲染生成子树 vnode 后，接下来就是继续调用 patch 函数把子树 vnode 挂载到 container 中了。
 
-5. 
+5. 渲染普通dom节点
 
 
 

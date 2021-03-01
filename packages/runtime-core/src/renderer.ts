@@ -514,7 +514,17 @@ function baseCreateRenderer(
       )
     }
   }
-
+  /**
+   * @desc 处理普通元素
+   * @param n1 新节点
+   * @param n2
+   * @param container
+   * @param anchor
+   * @param parentComponent
+   * @param parentSuspense
+   * @param isSVG
+   * @param optimized
+   */
   const processElement = (
     n1: VNode | null,
     n2: VNode,
@@ -526,7 +536,9 @@ function baseCreateRenderer(
     optimized: boolean
   ) => {
     isSVG = isSVG || (n2.type as string) === 'svg'
+    // 是否第一次挂载
     if (n1 == null) {
+      // 挂载元素节点
       mountElement(
         n2,
         container,
@@ -537,10 +549,24 @@ function baseCreateRenderer(
         optimized
       )
     } else {
+       // 更新元素节点
       patchElement(n1, n2, parentComponent, parentSuspense, isSVG, optimized)
     }
   }
-
+  /**
+   * @desc 挂载元素节点
+   * 1 创建DOM元素节点 通过 hostCreateElement 方法创建
+   * 2 处理props 给节点丰富class style event 等属性 并做相关处理
+   * 3 处理children
+   * 4 挂载DOM元素到container上
+   * @param vnode
+   * @param container
+   * @param anchor
+   * @param parentComponent
+   * @param parentSuspense
+   * @param isSVG
+   * @param optimized
+   */
   const mountElement = (
     vnode: VNode,
     container: RendererElement,
@@ -571,6 +597,7 @@ function baseCreateRenderer(
       // exactly the same, and we can simply do a clone here.
       el = vnode.el = hostCloneNode(vnode.el)
     } else {
+      // 创建 dom 元素节点
       el = vnode.el = hostCreateElement(
         vnode.type as string,
         isSVG,
@@ -578,6 +605,7 @@ function baseCreateRenderer(
       )
       // props
       if (props) {
+        // 处理props 比如 class style event 等属性
         for (const key in props) {
           if (!isReservedProp(key)) {
             hostPatchProp(el, key, null, props[key], isSVG)
@@ -603,8 +631,14 @@ function baseCreateRenderer(
       }
 
       // children
+      // shapeFlag & 8 处理子节点是纯文本的情况
       if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
+        // function setElementText (el, text) {
+        //   el.textContent = text;
+        // }
         hostSetElementText(el, vnode.children as string)
+
+        // shapeFlag & 16 处理子节点是数组的情况
       } else if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
         mountChildren(
           vnode.children as VNodeArrayChildren,
@@ -620,7 +654,17 @@ function baseCreateRenderer(
         transition.beforeEnter(el)
       }
     }
+    // 把创建的 DOM 元素节点挂载到 container 上
+    // web => hostInsert
 
+    // function insert (child, parent, anchor) {
+    // 如果有参考元素 anchor
+    //   if(anchor) {
+    //     parent.insertBefore(child, anchor)
+    //   } else {
+    //     parent.appendChild(child)
+    //   }
+    // }
     hostInsert(el, container, anchor)
     if (
       (vnodeHook = props && props.onVnodeMounted) ||
@@ -634,7 +678,21 @@ function baseCreateRenderer(
       }, parentSuspense)
     }
   }
-
+  /**
+   * @desc 处理子节点是数组，
+   * 遍历 children 获取到每一个 child，然后递归执行 patch 方法挂载每一个 child 。
+   * 可以看到，mountChildren 函数的第二个参数是 container，而我们调用 mountChildren 方法传入的第二个参数是在 mountElement 时创建的 DOM 节点，这就很好地建立了父子关系。
+   * 通过递归 patch 这种深度优先遍历树的方式，我们就可以构造完整的 DOM 树，完成组件的渲染。
+   * 最后通过 hostInsert 方法把创建的 DOM 元素节点挂载到 container 上，它在 Web 环境下这样定义：
+   * @param children
+   * @param container
+   * @param anchor
+   * @param parentComponent
+   * @param parentSuspense
+   * @param isSVG
+   * @param optimized
+   * @param start
+   */
   const mountChildren: MountChildrenFn = (
     children,
     container,
@@ -646,9 +704,12 @@ function baseCreateRenderer(
     start = 0
   ) => {
     for (let i = start; i < children.length; i++) {
+      // 预处理child
       const child = (children[i] = optimized
         ? cloneIfMounted(children[i] as VNode)
         : normalizeVNode(children[i]))
+      // 递归 patch 挂载child
+      // 在 mountChildren 的时候递归执行的是 patch 函数，而不是 mountElement 函数，这是因为子节点可能有其他类型的 vnode，比如组件 vnode。
       patch(
         null,
         child,
