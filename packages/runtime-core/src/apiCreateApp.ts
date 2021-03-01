@@ -104,7 +104,11 @@ export type CreateAppFunction<HostElement> = (
   rootComponent: PublicAPIComponent,
   rootProps?: Data | null
 ) => App<HostElement>
-
+/**
+ *
+ * @param render 渲染主逻辑
+ * @param hydrate composition api render
+ */
 export function createAppAPI<HostElement>(
   render: RootRenderFunction,
   hydrate?: RootHydrateFunction

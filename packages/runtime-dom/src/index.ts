@@ -13,7 +13,7 @@ import { nodeOps } from './nodeOps'
 import { patchProp } from './patchProp'
 // Importing from the compiler, will be tree-shaken in prod
 import { isFunction, isString, isHTMLTag, isSVGTag } from '@vue/shared'
-
+// 渲染相关的一些配置，比如更新属性的方法，操作dom的方法
 const rendererOptions = {
   patchProp,
   ...nodeOps
@@ -24,7 +24,7 @@ const rendererOptions = {
 let renderer: Renderer | HydrationRenderer
 
 let enabledHydration = false
-
+// 延时创建渲染器， 当用户依赖响应式包的时候，可以通过tree-shaking移除核心渲染逻辑相关的代码
 function ensureRenderer() {
   return renderer || (renderer = createRenderer(rendererOptions))
 }
@@ -45,8 +45,14 @@ export const render = ((...args) => {
 export const hydrate = ((...args) => {
   ensureHydrationRenderer().hydrate(...args)
 }) as RootHydrateFunction
-
+/**
+ * 做两件事情
+ * 1 创建app对象
+ * 2 重写mount
+ */
 export const createApp = ((...args) => {
+  // 创建app对象
+  // ensureRenderer用来创建一个渲染器对象
   const app = ensureRenderer().createApp(...args)
 
   if (__DEV__) {
@@ -54,6 +60,7 @@ export const createApp = ((...args) => {
   }
 
   const { mount } = app
+  // 重写mount 方法
   app.mount = (containerOrSelector: Element | string): any => {
     const container = normalizeContainer(containerOrSelector)
     if (!container) return
