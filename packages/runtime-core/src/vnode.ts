@@ -207,6 +207,7 @@ export function isSameVNodeType(n1: VNode, n2: VNode): boolean {
     // HMR only: if the component has been hot-updated, force a reload.
     return false
   }
+  // 比较type和key的值
   return n1.type === n2.type && n1.key === n2.key
 }
 
@@ -239,6 +240,14 @@ export const createVNode = (__DEV__
   ? createVNodeWithArgsTransform
   : _createVNode) as typeof _createVNode
 
+/**
+ * @desc 对props做标准化处理，对vnode的类型信息编码，标准化子节点children
+ * @param type
+ * @param props
+ * @param children
+ * @param patchFlag
+ * @param dynamicProps
+ */
 function _createVNode(
   type: VNodeTypes | ClassComponent,
   props: (Data & VNodeProps) | null = null,
@@ -260,6 +269,7 @@ function _createVNode(
 
   // class & style normalization.
   if (props) {
+    // 处理props相关逻辑， 标准化class 和 style
     // for reactive or proxy objects, we need to clone it to enable mutation.
     if (isProxy(props) || InternalObjectKey in props) {
       props = extend({}, props)
@@ -279,6 +289,7 @@ function _createVNode(
   }
 
   // encode the vnode type information into a bitmap
+  // 对 vnode 类型信息编码
   const shapeFlag = isString(type)
     ? ShapeFlags.ELEMENT
     : __FEATURE_SUSPENSE__ && isSuspense(type)
@@ -328,7 +339,7 @@ function _createVNode(
     dynamicChildren: null,
     appContext: null
   }
-
+  // 标准化子节点，把不同的数据类型的children 转成数组或者文本类型
   normalizeChildren(vnode, children)
 
   // presence of a patch flag indicates this node needs patching on updates.

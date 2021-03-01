@@ -335,6 +335,7 @@ function baseCreateRenderer(
 
   // Note: functions inside this closure should use `const xxx = () => {}`
   // style in order to prevent being inlined by minifiers.
+  // 创建或者更新组件
   const patch: PatchFn = (
     n1,
     n2,
@@ -346,6 +347,7 @@ function baseCreateRenderer(
     optimized = false
   ) => {
     // patching & not same type, unmount old tree
+    // 如果存在新旧节点，且新旧节点类型不同，则销毁旧的节点
     if (n1 && !isSameVNodeType(n1, n2)) {
       anchor = getNextHostNode(n1)
       unmount(n1, parentComponent, parentSuspense, true)
@@ -1926,15 +1928,23 @@ function baseCreateRenderer(
     }
   }
 
+  /**
+   * @desc 如果它的第一个参数 vnode 为空，则执行销毁组件的逻辑，否则执行创建或者更新组件的逻辑。
+   * @param vnode 虚拟dom
+   * @param container 挂载的根组件
+   */
   const render: RootRenderFunction = (vnode, container) => {
     if (vnode == null) {
+      // 销毁组件
       if (container._vnode) {
         unmount(container._vnode, null, null, true)
       }
     } else {
+      // 创建或者更新组件
       patch(container._vnode || null, vnode, container)
     }
     flushPostFlushCbs()
+    // 缓存vnode节点， 表示已经渲染
     container._vnode = vnode
   }
 
