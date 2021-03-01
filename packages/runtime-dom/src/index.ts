@@ -52,24 +52,33 @@ export const hydrate = ((...args) => {
  */
 export const createApp = ((...args) => {
   // 创建app对象
-  // ensureRenderer用来创建一个渲染器对象
+  // ensureRenderer用来创建一个渲染器对象 包含一个createApp方法
+  // createApp时执行createAppApi返回的函数，接收rootComponent, prop两个参数
+  // 应用层面执行createApp（App）方法时候 会把App组件对象作为根组件传递给rootComponent createApp内部就创建了一个app对象， app对象会提供mount方法 该方法用来挂载组件
   const app = ensureRenderer().createApp(...args)
+
 
   if (__DEV__) {
     injectNativeTagCheck(app)
   }
 
+  // app对象中已包含mount方法
+  // app对象中的是mount针对跨平台渲染挂载，为了不破坏跨平台方案，现在需要对web端重写
   const { mount } = app
-  // 重写mount 方法
+  // 重写mount 方法 针对web
   app.mount = (containerOrSelector: Element | string): any => {
+    // 标准化容器
     const container = normalizeContainer(containerOrSelector)
     if (!container) return
     const component = app._component
+    // 如组件对象没有定义 render 函数和 template 模板，则取容器的 innerHTML 作为组件模板内容
     if (!isFunction(component) && !component.render && !component.template) {
       component.template = container.innerHTML
     }
+    // 挂载前清空容器内容
     // clear content before mounting
     container.innerHTML = ''
+    // 真正的挂载
     const proxy = mount(container)
     container.removeAttribute('v-cloak')
     return proxy
@@ -104,7 +113,11 @@ function injectNativeTagCheck(app: App) {
     writable: false
   })
 }
-
+/**
+ * @desc 标准化容器
+ * @param container
+ * @type {{ string | Element }} if string => string => element
+ */
 function normalizeContainer(container: Element | string): Element | null {
   if (isString(container)) {
     const res = document.querySelector(container)
