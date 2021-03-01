@@ -1122,14 +1122,21 @@ function baseCreateRenderer(
     }
   }
   /**
-   * 
-   * @param instance 
-   * @param initialVNode 
-   * @param container 
-   * @param anchor 
-   * @param parentSuspense 
-   * @param isSVG 
-   * @param optimized 
+   * @desc 该函数利用响应式库的 effect 函数创建了一个副作用渲染函数 componentEffect
+   * 副作用，这里你可以简单地理解为，当组件的数据发生变化时，effect 函数包裹的内部渲染函数 componentEffect 会重新执行一遍，从而达到重新渲染组件的目的。
+   * 渲染函数内部也会判断这是一次初始渲染还是组件更新。
+   * 初始渲染 1 把渲染组件生成subtree 把subtree挂载到container 中
+   * 组件更新
+   * @notice
+   * 1 渲染组件生成vnode 它也是一个vnode对象
+   *  vue3 subtree 和 initialVnode 对应  vue2 _vnode 和 $vnode
+   * @param instance
+   * @param initialVNode
+   * @param container
+   * @param anchor
+   * @param parentSuspense
+   * @param isSVG
+   * @param optimized
    */
   const setupRenderEffect: SetupRenderEffectFn = (
     instance,
@@ -1140,8 +1147,10 @@ function baseCreateRenderer(
     isSVG,
     optimized
   ) => {
+    // 创建响应式的副作用渲染函数
     // create reactive effect for rendering
     instance.update = effect(function componentEffect() {
+      // 初次渲染
       if (!instance.isMounted) {
         let vnodeHook: VNodeHook | null | undefined
         const { el, props } = initialVNode
@@ -1149,6 +1158,7 @@ function baseCreateRenderer(
         if (__DEV__) {
           startMeasure(instance, `render`)
         }
+        // 渲染组件生成子树 vnode
         const subTree = (instance.subTree = renderComponentRoot(instance))
         if (__DEV__) {
           endMeasure(instance, `render`)
@@ -1179,6 +1189,7 @@ function baseCreateRenderer(
           if (__DEV__) {
             startMeasure(instance, `patch`)
           }
+          // 把子树 vnode 挂载到 container 中
           patch(
             null,
             subTree,
@@ -1191,6 +1202,7 @@ function baseCreateRenderer(
           if (__DEV__) {
             endMeasure(instance, `patch`)
           }
+          // 保留渲染生成的子树根 dom 节点
           initialVNode.el = subTree.el
         }
         // mounted hook
@@ -1210,7 +1222,9 @@ function baseCreateRenderer(
         ) {
           queuePostRenderEffect(a, parentSuspense)
         }
+        // 子树已经被挂载的标志
         instance.isMounted = true
+        // 更新组件
       } else {
         // updateComponent
         // This is triggered by mutation of component's own state (next: null)
