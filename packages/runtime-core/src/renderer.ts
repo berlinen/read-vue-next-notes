@@ -333,6 +333,17 @@ function baseCreateRenderer(
     insertStaticContent: hostInsertStaticContent
   } = options
 
+  /**
+   * @desc 1 根据vnode挂载dom  2 根据新旧vnode更新dom
+   * @param n1 旧的vnode n1 == null 表示是第一次的挂载过程
+   * @param n2 新的vnode 会根据这个vnode类型执行不同的处理逻辑
+   * @param container 表示Dom容器 也就是vnode渲染生成Dom后 会挂载到container下面
+   * @param anchor
+   * @param parentComponent
+   * @param parentSuspense
+   * @param isSVG
+   * @param optimized
+   */
   // Note: functions inside this closure should use `const xxx = () => {}`
   // style in order to prevent being inlined by minifiers.
   // 创建或者更新组件
@@ -356,17 +367,21 @@ function baseCreateRenderer(
 
     const { type, ref, shapeFlag } = n2
     switch (type) {
+      // 处理文本节点
       case Text:
         processText(n1, n2, container, anchor)
         break
+      // 处理注释节点
       case Comment:
         processCommentNode(n1, n2, container, anchor)
         break
+      // 处理静态节点
       case Static:
         if (n1 == null) {
           mountStaticNode(n2, container, anchor, isSVG)
         } // static nodes are noop on patch
         break
+      // 处理Fragment元素
       case Fragment:
         processFragment(
           n1,
@@ -380,7 +395,9 @@ function baseCreateRenderer(
         )
         break
       default:
+        // shapeFlag & 1
         if (shapeFlag & ShapeFlags.ELEMENT) {
+          // 处理普通 DOM 元素
           processElement(
             n1,
             n2,
@@ -391,7 +408,9 @@ function baseCreateRenderer(
             isSVG,
             optimized
           )
+          // shapeFlag & 6
         } else if (shapeFlag & ShapeFlags.COMPONENT) {
+          // 处理组件
           processComponent(
             n1,
             n2,
@@ -402,7 +421,9 @@ function baseCreateRenderer(
             isSVG,
             optimized
           )
+            // shapeFlag & 64
         } else if (shapeFlag & ShapeFlags.TELEPORT) {
+           // 处理 TELEPORT
           ;(type as typeof TeleportImpl).process(
             n1,
             n2,
@@ -414,7 +435,9 @@ function baseCreateRenderer(
             optimized,
             internals
           )
+           // shapeFlag & 128
         } else if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
+          // 处理 SUSPENSE
           ;(type as typeof SuspenseImpl).process(
             n1,
             n2,
@@ -957,6 +980,7 @@ function baseCreateRenderer(
           optimized
         )
       } else {
+        // 挂载组件
         mountComponent(
           n2,
           container,
@@ -968,10 +992,23 @@ function baseCreateRenderer(
         )
       }
     } else {
+       // 更新组件
       updateComponent(n1, n2, parentComponent, optimized)
     }
   }
-
+  /**
+   * @desc 1 创建组件实例 2 设置组件实例 3 设置并运行待带副作用的渲染函数
+   * 内部通过对象的方式去创建了当前渲染的组件实例
+   * 设置组件实例子
+   * instance保留了许多组件相关的数据，维护了组件的上下文，包括对props，插槽以及其他实例的属性的初始化处理
+   * @param initialVNode
+   * @param container
+   * @param anchor
+   * @param parentComponent
+   * @param parentSuspense
+   * @param isSVG
+   * @param optimized
+   */
   const mountComponent: MountComponentFn = (
     initialVNode,
     container,
@@ -981,6 +1018,7 @@ function baseCreateRenderer(
     isSVG,
     optimized
   ) => {
+    // 创建组件实例
     const instance: ComponentInternalInstance = (initialVNode.component = createComponentInstance(
       initialVNode,
       parentComponent,
@@ -1005,6 +1043,7 @@ function baseCreateRenderer(
     if (__DEV__) {
       startMeasure(instance, `init`)
     }
+    // 设置组件实例
     setupComponent(instance)
     if (__DEV__) {
       endMeasure(instance, `init`)
@@ -1027,7 +1066,7 @@ function baseCreateRenderer(
       }
       return
     }
-
+    // 设置并运行带副作用的渲染函数
     setupRenderEffect(
       instance,
       initialVNode,
@@ -1082,7 +1121,16 @@ function baseCreateRenderer(
       n2.el = n1.el
     }
   }
-
+  /**
+   * 
+   * @param instance 
+   * @param initialVNode 
+   * @param container 
+   * @param anchor 
+   * @param parentSuspense 
+   * @param isSVG 
+   * @param optimized 
+   */
   const setupRenderEffect: SetupRenderEffectFn = (
     instance,
     initialVNode,
