@@ -1186,10 +1186,20 @@ function baseCreateRenderer(
    * @desc 该函数利用响应式库的 effect 函数创建了一个副作用渲染函数 componentEffect
    * 副作用，这里你可以简单地理解为，当组件的数据发生变化时，effect 函数包裹的内部渲染函数 componentEffect 会重新执行一遍，从而达到重新渲染组件的目的。
    * 渲染函数内部也会判断这是一次初始渲染还是组件更新。
-   * 初始渲染 1 把渲染组件生成subtree 把subtree挂载到container 中
-   * 组件更新
+   * 初始渲染 1 把渲染组件生成subtree 2 把subtree挂载到container 中
+   * 组件更新 1 更新组件 vnode 节点 2 渲染新的子树vnode  3 根据新旧子树vnode执行patch逻辑
+   *
    * @notice
    * 1 渲染组件生成vnode 它也是一个vnode对象
+   *
+   * 2 更新
+   *  更新组件vnode 判断组件实例是否有新的组件 vnode 用 next 来表示
+   *  有 则更新组件vnode 没有 next 指向之前组件的 vnode
+   *
+   *  渲染新的子树 vnode， 因为数据发生变化， 模版和数据相关 渲染生成的子树 vnode 也会发生相应的变化
+   *
+   *  核心 patch 找出新旧子树 vnode 的不同， 并找到一种合适的方式更新DOM
+   *  
    *  vue3 subtree 和 initialVnode 对应  vue2 _vnode 和 $vnode
    * @param instance
    * @param initialVNode
@@ -1213,6 +1223,7 @@ function baseCreateRenderer(
     instance.update = effect(function componentEffect() {
       // 初次渲染
       if (!instance.isMounted) {
+        // 渲染组件
         let vnodeHook: VNodeHook | null | undefined
         const { el, props } = initialVNode
         const { bm, m, a, parent } = instance
@@ -1290,6 +1301,7 @@ function baseCreateRenderer(
         // updateComponent
         // This is triggered by mutation of component's own state (next: null)
         // OR parent calling processComponent (next: VNode)
+        //  next 表示新的组件 vnode
         let { next, bu, u, parent, vnode } = instance
         let vnodeHook: VNodeHook | null | undefined
         if (__DEV__) {
@@ -1297,6 +1309,7 @@ function baseCreateRenderer(
         }
 
         if (next) {
+          // 更新组件 vnode 节点信息
           updateComponentPreRender(instance, next, optimized)
         } else {
           next = vnode
@@ -1304,11 +1317,14 @@ function baseCreateRenderer(
         if (__DEV__) {
           startMeasure(instance, `render`)
         }
+        // 渲染新的子树 vnode
         const nextTree = renderComponentRoot(instance)
         if (__DEV__) {
           endMeasure(instance, `render`)
         }
+        // 缓存旧的子树 vnode
         const prevTree = instance.subTree
+        // 更新子树 vnode
         instance.subTree = nextTree
         next.el = vnode.el
         // beforeUpdate hook
@@ -1327,12 +1343,15 @@ function baseCreateRenderer(
         if (__DEV__) {
           startMeasure(instance, `patch`)
         }
+        // 组件更新核心逻辑，根据新旧子树 vnode 做 patch
         patch(
           prevTree,
           nextTree,
           // parent may have changed if it's in a teleport
+          // 如果在 teleport 组件中父节点可能已改变，所以容器直接找旧树 Dom 元素的父节点
           hostParentNode(prevTree.el!)!,
           // anchor may have changed if it's in a fragment
+          // 参考节点在 fragment 的情况可能改变， 所以直接找旧树 dom 元素的下一个节点
           getNextHostNode(prevTree),
           instance,
           parentSuspense,
@@ -1341,6 +1360,7 @@ function baseCreateRenderer(
         if (__DEV__) {
           endMeasure(instance, `patch`)
         }
+        // 缓存更新后的 DOM 节点
         next.el = nextTree.el
         if (next === null) {
           // self-triggered update. In case of HOC, update parent component
