@@ -725,7 +725,19 @@ function baseCreateRenderer(
       )
     }
   }
-
+  /**
+   * @description
+   *  更新元素
+   * 1 更新 props 2 更新子节点
+   * 1 更新 props => patchProps 更新Dom节点的class style event others dom propertys
+   * 2 更新子节点 children => patchChildren
+   * @param n1
+   * @param n2
+   * @param parentComponent
+   * @param parentSuspense
+   * @param isSVG
+   * @param optimized
+   */
   const patchElement = (
     n1: VNode,
     n2: VNode,
@@ -761,6 +773,7 @@ function baseCreateRenderer(
       // (i.e. at the exact same position in the source template)
       if (patchFlag & PatchFlags.FULL_PROPS) {
         // element props contain dynamic keys, full diff needed
+        // 更新props
         patchProps(
           el,
           n2,
@@ -824,6 +837,7 @@ function baseCreateRenderer(
       }
     } else if (!optimized && dynamicChildren == null) {
       // unoptimized, full diff
+       // 更新 props
       patchProps(
         el,
         n2,
@@ -847,6 +861,7 @@ function baseCreateRenderer(
       )
     } else if (!optimized) {
       // full diff
+      // 更新子节点
       patchChildren(
         n1,
         n2,
@@ -1307,6 +1322,8 @@ function baseCreateRenderer(
         // This is triggered by mutation of component's own state (next: null)
         // OR parent calling processComponent (next: VNode)
         //  next 表示新的组件 vnode
+        // 数据变化 next = null
+        // 子组件需要更新 next = 新的子组件
         let { next, bu, u, parent, vnode } = instance
         let vnodeHook: VNodeHook | null | undefined
         if (__DEV__) {
@@ -1315,6 +1332,7 @@ function baseCreateRenderer(
 
         if (next) {
           // 更新组件 vnode 节点信息
+          // 更新组件 vnode 节点信息，包括更改组件实例的 vnode 指针、更新 props 和更新插槽等一系列操作
           updateComponentPreRender(instance, next, optimized)
         } else {
           next = vnode
@@ -1322,7 +1340,8 @@ function baseCreateRenderer(
         if (__DEV__) {
           startMeasure(instance, `render`)
         }
-        // 渲染新的子树 vnode
+        // 渲染新的子树 vnode    instance 更新完vnode的组件实例
+        // 它依赖了更新后的组件 vnode 中的 props 和 slots 等数据。
         const nextTree = renderComponentRoot(instance)
         if (__DEV__) {
           endMeasure(instance, `render`)
@@ -1389,20 +1408,43 @@ function baseCreateRenderer(
       }
     }, __DEV__ ? createDevEffectOptions(instance) : prodEffectOptions)
   }
-
+  /**
+   * @description 组件更新
+   * @param instance
+   * @param nextVNode
+   * @param optimized
+   */
   const updateComponentPreRender = (
     instance: ComponentInternalInstance,
     nextVNode: VNode,
     optimized: boolean
   ) => {
+    // 新组件 vnode 的 component 属性指向组件实例
     nextVNode.component = instance
+    // 旧组件 vnode 的 props 属性
     const prevProps = instance.vnode.props
+    // 组件实例的 vnode 属性指向新的组件 vnode
     instance.vnode = nextVNode
+    // 清空 next 属性，为了下一次重新渲染准备
     instance.next = null
+    // 更新 props
     updateProps(instance, nextVNode.props, prevProps, optimized)
+    // 更新 插槽
     updateSlots(instance, nextVNode.children)
   }
-
+  /**
+   * @desc
+   * patchchildren 更新子节点
+   * 1
+   * @param n1
+   * @param n2
+   * @param container
+   * @param anchor
+   * @param parentComponent
+   * @param parentSuspense
+   * @param isSVG
+   * @param optimized
+   */
   const patchChildren: PatchChildrenFn = (
     n1,
     n2,
@@ -1418,6 +1460,7 @@ function baseCreateRenderer(
     const c2 = n2.children
 
     const { patchFlag, shapeFlag } = n2
+    // 子节点有三种情况 文本 数组 空
     if (patchFlag === PatchFlags.BAIL) {
       optimized = false
     }
@@ -1454,17 +1497,24 @@ function baseCreateRenderer(
     }
 
     // children has 3 possibilities: text, array or no children.
+    // shapeFlag & 8 文本
     if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
       // text children fast path
       if (prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+        // 数组 -> 文本，则删除之前的节点
         unmountChildren(c1 as VNode[], parentComponent, parentSuspense)
       }
       if (c2 !== c1) {
+        // 文本对比不同， 则替换为新的文本
         hostSetElementText(container, c2 as string)
       }
+      // 现在的节点是数组 或者 为 空
     } else {
+      // 之前的节点是数组
       if (prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) {
         // prev children was array
+        // shapeFlag & 16 数组
+        // 新的节点仍然是数组，则做完整的 diff
         if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
           // two arrays, cannot assume anything, do full diff
           patchKeyedChildren(
@@ -1477,18 +1527,25 @@ function baseCreateRenderer(
             isSVG,
             optimized
           )
+          // 数组 -> 空 则仅仅删除之前的节点
         } else {
           // no new children, just unmount old
+          // 数组 -> 空 则仅仅删除之前的节点
           unmountChildren(c1 as VNode[], parentComponent, parentSuspense, true)
         }
       } else {
         // prev children was text OR null
         // new children is array OR null
+        // 之前的子节点是文本节点或者为空
+        // 新的子节点是数组或者为空
+
         if (prevShapeFlag & ShapeFlags.TEXT_CHILDREN) {
+          // 如果之前节点是文本，则清空
           hostSetElementText(container, '')
         }
         // mount new if array
         if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+          // 如果新的节点是数组， 则挂载新的子节点
           mountChildren(
             c2 as VNodeArrayChildren,
             container,
