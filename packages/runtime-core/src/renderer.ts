@@ -335,6 +335,7 @@ function baseCreateRenderer(
 
   /**
    * @desc 1 根据vnode挂载dom  2 根据新旧vnode更新dom
+   *
    * @param n1 旧的vnode n1 == null 表示是第一次的挂载过程
    * @param n2 新的vnode 会根据这个vnode类型执行不同的处理逻辑
    * @param container 表示Dom容器 也就是vnode渲染生成Dom后 会挂载到container下面
@@ -359,6 +360,7 @@ function baseCreateRenderer(
   ) => {
     // patching & not same type, unmount old tree
     // 如果存在新旧节点，且新旧节点类型不同，则销毁旧的节点
+    // 如果是相同的vnode 类型， 就需要走diff更新流程了，会根据不同的vnode类型执行不同的处理逻辑
     if (n1 && !isSameVNodeType(n1, n2)) {
       anchor = getNextHostNode(n1)
       unmount(n1, parentComponent, parentSuspense, true)
@@ -1173,9 +1175,11 @@ function baseCreateRenderer(
         instance.next = n2
         // in case the child component is also queued, remove it to avoid
         // double updating the same child component in the same flush.
+        // 避免子组件由于自身数据变化导致的重复更新
         invalidateJob(instance.update)
         // instance.update is the reactive effect runner.
-        instance.update()
+        // 执行子组件的副作用渲染函数
+        instance.update() // 来主动触发子组件的更新
       }
     } else {
       // no update needed. just copy over properties
