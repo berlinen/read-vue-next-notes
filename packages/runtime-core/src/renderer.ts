@@ -362,6 +362,7 @@ function baseCreateRenderer(
     if (n1 && !isSameVNodeType(n1, n2)) {
       anchor = getNextHostNode(n1)
       unmount(n1, parentComponent, parentSuspense, true)
+      // 旧的vnode 设置null 保证后续都走 mount 逻辑
       n1 = null
     }
 
@@ -1199,7 +1200,7 @@ function baseCreateRenderer(
    *  渲染新的子树 vnode， 因为数据发生变化， 模版和数据相关 渲染生成的子树 vnode 也会发生相应的变化
    *
    *  核心 patch 找出新旧子树 vnode 的不同， 并找到一种合适的方式更新DOM
-   *  
+   *
    *  vue3 subtree 和 initialVnode 对应  vue2 _vnode 和 $vnode
    * @param instance
    * @param initialVNode

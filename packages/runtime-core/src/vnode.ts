@@ -197,7 +197,11 @@ export function createBlock(
 export function isVNode(value: any): value is VNode {
   return value ? value._isVNode === true : false
 }
-
+/**
+ *
+ * @param n1 旧节点
+ * @param n2 新节点
+ */
 export function isSameVNodeType(n1: VNode, n2: VNode): boolean {
   if (
     __DEV__ &&
@@ -207,7 +211,7 @@ export function isSameVNodeType(n1: VNode, n2: VNode): boolean {
     // HMR only: if the component has been hot-updated, force a reload.
     return false
   }
-  // 比较type和key的值
+  // 比较type和key的值  n1 和 n2 节点的type 和 key 都相同，才是相同节点
   return n1.type === n2.type && n1.key === n2.key
 }
 
