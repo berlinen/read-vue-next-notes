@@ -115,7 +115,10 @@ export interface ComponentRenderContext {
   [key: string]: any
   _: ComponentInternalInstance
 }
-
+/**
+ * @description
+ * instance.ctx 的代理逻辑 get、set 和 has
+ */
 export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
   get({ _: instance }: ComponentRenderContext, key: string) {
     const {

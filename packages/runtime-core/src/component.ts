@@ -342,25 +342,41 @@ export function validateComponentName(name: string, config: AppConfig) {
 }
 
 export let isInSSRComponentSetup = false
-
+/**
+ * @description
+ * 设置组件实例
+ * @param instance
+ * @param isSSR
+ */
 export function setupComponent(
   instance: ComponentInternalInstance,
   isSSR = false
 ) {
   isInSSRComponentSetup = isSSR
-
+  // 根据 shapeFlag 的值，我们可以判断这是不是一个有状态组件
   const { props, children, shapeFlag } = instance.vnode
+  // 判断是否是一个有状态的组件
   const isStateful = shapeFlag & ShapeFlags.STATEFUL_COMPONENT
+  // 初始化props
   initProps(instance, props, isStateful, isSSR)
+  // 初始化插槽
   initSlots(instance, children)
-
+ // 设置有状态组件实例
   const setupResult = isStateful
     ? setupStatefulComponent(instance, isSSR)
     : undefined
   isInSSRComponentSetup = false
   return setupResult
 }
-
+/**
+ * @description
+ * 设置有状态组件
+ * 1 创建渲染上下文代理 2 判断处理setup函数 3完成组件实例设置
+ * 1 创建渲染上下文代理： 它主要对 instance.ctx 做了代理
+ * 对渲染上下文 instance.ctx 属性的访问和修改，代理到对 setupState、ctx、data、props 中的数据的访问和修改。
+ * @param instance
+ * @param isSSR
+ */
 function setupStatefulComponent(
   instance: ComponentInternalInstance,
   isSSR: boolean
@@ -385,20 +401,25 @@ function setupStatefulComponent(
     }
   }
   // 0. create render proxy property access cache
+  // 创建渲染代理的属性访问缓存
   instance.accessCache = {}
   // 1. create public instance / render proxy
+  // 创建渲染上下文代理
   instance.proxy = new Proxy(instance.ctx, PublicInstanceProxyHandlers)
   if (__DEV__) {
     exposePropsOnRenderContext(instance)
   }
   // 2. call setup()
+  // 判断处理 setup 函数
   const { setup } = Component
   if (setup) {
+    // 如果 setup 函数带参数，则创建一个 setupContext
     const setupContext = (instance.setupContext =
       setup.length > 1 ? createSetupContext(instance) : null)
 
     currentInstance = instance
     pauseTracking()
+    // 执行 setup 函数，获取结果
     const setupResult = callWithErrorHandling(
       setup,
       instance,
@@ -412,6 +433,7 @@ function setupStatefulComponent(
       if (isSSR) {
         // return the promise so server-renderer can wait on it
         return setupResult.then((resolvedResult: unknown) => {
+          // 处理 setup 执行结果
           handleSetupResult(instance, resolvedResult, isSSR)
         })
       } else if (__FEATURE_SUSPENSE__) {
@@ -425,9 +447,11 @@ function setupStatefulComponent(
         )
       }
     } else {
+      // 处理 setup 执行结果
       handleSetupResult(instance, setupResult, isSSR)
     }
   } else {
+     // 完成组件实例设置
     finishComponentSetup(instance, isSSR)
   }
 }
