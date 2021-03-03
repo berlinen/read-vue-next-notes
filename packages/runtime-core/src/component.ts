@@ -190,70 +190,123 @@ export interface ComponentInternalInstance {
 const emptyAppContext = createAppContext()
 
 let uid = 0
-
+/**
+ * @description
+ * 创建组件实例
+ * @param vnode
+ * @param parent
+ * @param suspense
+ */
 export function createComponentInstance(
   vnode: VNode,
   parent: ComponentInternalInstance | null,
   suspense: SuspenseBoundary | null
 ) {
   // inherit parent app context - or - if root, adopt from root vnode
+  // 继承父组件实例上的 appContext， 如果是根组件， 则直接从根 vnode 中取
   const appContext =
     (parent ? parent.appContext : vnode.appContext) || emptyAppContext
   const instance: ComponentInternalInstance = {
+    // 组件唯一id
     uid: uid++,
+    // 组件vnode
     vnode,
+    // 父组件实例
     parent,
+    // app 上下文
     appContext,
+    // vnode 节点类型
     type: vnode.type as Component,
+    // 根组件实例
     root: null!, // to be immediately set
+    // 新的组件 vnode
     next: null,
+    // 子节点 vnode
     subTree: null!, // will be set synchronously right after creation
+    // 带副作用更新函数
     update: null!, // will be set synchronously right after creation
+    // 渲染函数
     render: null,
+    // 渲染上下文代理
     proxy: null,
+    // 带有 with 区块的渲染上下文代理
     withProxy: null,
+    // 响应式相关对象
     effects: null,
+    // 依赖注入相关
     provides: parent ? parent.provides : Object.create(appContext.provides),
+    // 渲染代理的属性访问缓存
     accessCache: null!,
+    // 渲染缓存
     renderCache: [],
 
     // state
+    // 渲染上下文
     ctx: EMPTY_OBJ,
+    // data 数据
     data: EMPTY_OBJ,
+    // props 数据
     props: EMPTY_OBJ,
+    // 普通属性
     attrs: EMPTY_OBJ,
+    // 插槽相关
     slots: EMPTY_OBJ,
+    // 组件或者 DOM 的 ref 引用
     refs: EMPTY_OBJ,
+    // setup 函数返回的响应式结果
     setupState: EMPTY_OBJ,
+    // setup 函数上下文数据
     setupContext: null,
 
     // per-instance asset storage (mutable during options resolution)
+    // 注册的组件
     components: Object.create(appContext.components),
+    // 注册的指令
     directives: Object.create(appContext.directives),
 
     // suspense related
+    // suspense 相关
     suspense,
+    // suspense 异步依赖
     asyncDep: null,
+    // suspense 异步依赖是否都已处理
     asyncResolved: false,
 
     // lifecycle hooks
     // not using enums here because it results in computed properties
+    // 是否挂载
     isMounted: false,
+    // 是否卸载
     isUnmounted: false,
+    // 是否激活
     isDeactivated: false,
+    // 生命周期，before create
     bc: null,
+    // 生命周期，created
     c: null,
+    // 生命周期，before mount
     bm: null,
+    // 生命周期，mounted
     m: null,
+    // 生命周期，before update
     bu: null,
+    // 生命周期，updated
     u: null,
+    // 生命周期，unmounted
     um: null,
+    // 生命周期，before unmount
     bum: null,
+    // 生命周期, deactivated
     da: null,
+    // 生命周期 activated
     a: null,
+    // 生命周期 render triggered
     rtg: null,
+    // 生命周期 render tracked
     rtc: null,
+    // 生命周期 error captured
     ec: null,
+    // 派发事件方法
     emit: null as any // to be set immediately
   }
   if (__DEV__) {
