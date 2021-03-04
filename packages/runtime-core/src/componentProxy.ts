@@ -118,7 +118,15 @@ export interface ComponentRenderContext {
 /**
  * @description
  * instance.ctx 的代理逻辑 get、set 和 has
+ *
  * 当我们访问 instance.ctx 渲染上下文中的属性时，就会进入 get 函数
+ *
+ * 函数首先判断 key 不以 $ 开头的情况，这部分数据可能是 setupState、data、props、ctx 中的一种，其中 data、props 我们已经很熟悉了；setupState 就是 setup 函数返回的数据,ctx 包括了计算属性、组件方法和用户自定义的一些数据。
+ * 如果 key 不以 $ 开头，那么就依次判断 setupState、data、props、ctx 中是否包含这个 key，如果包含就返回对应值。注意这个判断顺序很重要，在 key 相同时它会决定数据获取的优先级，
+ *
+ * 定义了 accessCache 作为渲染代理的属性访问缓存作用
+ *
+ * 触发 get 函数，这其中最昂贵的部分就是多次调用 hasOwn 去判断 key 在不在某个类型的数据中，但是在普通对象上执行简单的属性访问相对要快得多。所以在第一次获取 key 对应的数据后，我们利用 accessCache[key] 去缓存数据，下一次再次根据 key 查找数据，我们就可以直接通过 accessCache[key] 获取对应的值，
  */
 export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
   get({ _: instance }: ComponentRenderContext, key: string) {
@@ -181,7 +189,10 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
         accessCache![key] = AccessTypes.OTHER
       }
     }
-
+    // key 不以$开头判断标准
+    //  $xxx 属性或方法（比如 $parent) => 是不是 vue-loader 编译注入的 css 模块内部的 key
+    //  => 是不是用户自定义以 $ 开头的 key => 最后判断是不是全局属性
+    // 如果都不满足，就剩两种情况了，即在非生产环境下就会报两种类型的警告，第一种是在 data 中定义的数据以 $ 开头的警告，因为 $ 是保留字符，不会做代理；第二种是在模板中使用的变量没有定义的警告。
     const publicGetter = publicPropertiesMap[key]
     let cssModule, globalProperties
     // public $xxx properties
@@ -218,7 +229,12 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
       )
     }
   },
-
+  /**
+   * 
+   * @param param0 
+   * @param key 
+   * @param value 
+   */
   set(
     { _: instance }: ComponentRenderContext,
     key: string,
