@@ -413,13 +413,25 @@ function setupStatefulComponent(
   // 判断处理 setup 函数
   const { setup } = Component
   if (setup) {
-    // 如果 setup 函数带参数，则创建一个 setupContext
+    // 如果 setup 函数带参数，则创建一个 setupContext  创建 setup 函数上下文
+    // 首先判断 setup 函数的参数长度，如果大于 1，则创建 setupContext 上下文
+    /**
+     * @example
+     * setup(props, { emit }) {
+     *  function onClick () {
+     *    emit('togglt')
+     *  }
+     *  return {
+     *    onClick
+     *  }
+     * }
+     */
     const setupContext = (instance.setupContext =
       setup.length > 1 ? createSetupContext(instance) : null)
 
     currentInstance = instance
     pauseTracking()
-    // 执行 setup 函数，获取结果
+    // 执行 setup 函数，获取结果  执行 setup 函数并获取结果
     const setupResult = callWithErrorHandling(
       setup,
       instance,
@@ -433,7 +445,7 @@ function setupStatefulComponent(
       if (isSSR) {
         // return the promise so server-renderer can wait on it
         return setupResult.then((resolvedResult: unknown) => {
-          // 处理 setup 执行结果
+          // 处理 setup 执行结果 处理 setup 函数的执行结果
           handleSetupResult(instance, resolvedResult, isSSR)
         })
       } else if (__FEATURE_SUSPENSE__) {

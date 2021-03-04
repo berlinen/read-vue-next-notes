@@ -239,7 +239,11 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
    * @example
    * 如果是用户自定义的数据，比如在 created 生命周期内定义的数据 它仅用于组件上下文的共享
    * 当执行 this.userMsg 赋值的时候，会触发 set 函数，最终 userMsg 会被保留到 ctx 中。
-   *
+   * export default {
+        created() {
+          this.userMsg = 'msg from user'
+        }
+      }
    * @param param0
    * @param key
    * @param value
@@ -289,9 +293,17 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
     return true
   },
   /**
-   * 
-   * @param param0 
-   * @param key 
+   * @description
+   * has 代理过程，当我们判断属性是否存在于 instance.ctx 渲染上下文中时，就会进入 has 函数，
+   * @example
+   * export default {
+        created () {
+          console.log('msg' in this)
+        }
+      }
+   *  依次判断 key 是否存在于 accessCache、data、setupState、props 、用户数据、公开属性以及全局属性中，然后返回结果。
+   * @param param0
+   * @param key
    */
   has(
     {
@@ -299,6 +311,7 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
     }: ComponentRenderContext,
     key: string
   ) {
+    // 依次判断
     return (
       accessCache![key] !== undefined ||
       (data !== EMPTY_OBJ && hasOwn(data, key)) ||
