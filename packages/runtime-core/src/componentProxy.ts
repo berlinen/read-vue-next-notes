@@ -118,6 +118,7 @@ export interface ComponentRenderContext {
 /**
  * @description
  * instance.ctx 的代理逻辑 get、set 和 has
+ * 当我们访问 instance.ctx 渲染上下文中的属性时，就会进入 get 函数
  */
 export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
   get({ _: instance }: ComponentRenderContext, key: string) {
@@ -138,8 +139,11 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
     // access on a plain object, so we use an accessCache object (with null
     // prototype) to memoize what access type a key corresponds to.
     if (key[0] !== '$') {
+      // setupState / data / props / ctx
+      // 渲染代理的属性访问缓存中
       const n = accessCache![key]
       if (n !== undefined) {
+        // 如果存在缓存数据，就从缓存中取得
         switch (n) {
           case AccessTypes.SETUP:
             return setupState[key]
@@ -153,9 +157,11 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
         }
       } else if (setupState !== EMPTY_OBJ && hasOwn(setupState, key)) {
         accessCache![key] = AccessTypes.SETUP
+        // 从 setupState中取数据
         return setupState[key]
       } else if (data !== EMPTY_OBJ && hasOwn(data, key)) {
         accessCache![key] = AccessTypes.DATA
+        // 从 data中取数据
         return data[key]
       } else if (
         // only cache other properties when instance has declared (thus stable)
@@ -164,11 +170,14 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
         hasOwn(normalizePropsOptions(type.props)[0]!, key)
       ) {
         accessCache![key] = AccessTypes.PROPS
+        // 从 props中取数据
         return props![key]
       } else if (ctx !== EMPTY_OBJ && hasOwn(ctx, key)) {
         accessCache![key] = AccessTypes.CONTEXT
+        // 从 ctx 中 取数据
         return ctx[key]
       } else {
+        // 都取不到
         accessCache![key] = AccessTypes.OTHER
       }
     }
@@ -176,6 +185,7 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
     const publicGetter = publicPropertiesMap[key]
     let cssModule, globalProperties
     // public $xxx properties
+    // 公开的 $xxx 属性或者方法
     if (publicGetter) {
       if (__DEV__ && key === '$attrs') {
         markAttrsAccessed()
@@ -183,21 +193,25 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
       return publicGetter(instance)
     } else if (
       // css module (injected by vue-loader)
+      // css 模块 通过 value-loader 编译的时候注入
       (cssModule = type.__cssModules) &&
       (cssModule = cssModule[key])
     ) {
       return cssModule
     } else if (ctx !== EMPTY_OBJ && hasOwn(ctx, key)) {
       // user may set custom properties to `this` that start with `$`
+      // 用户自定义的属性 也用 $ 开头
       accessCache![key] = AccessTypes.CONTEXT
       return ctx[key]
     } else if (
       // global properties
+      // 全局定义的属性
       ((globalProperties = appContext.config.globalProperties),
       hasOwn(globalProperties, key))
     ) {
       return globalProperties[key]
     } else if (__DEV__ && currentRenderingInstance) {
+     // 在模板中使用的变量如果没有定义，报警告
       warn(
         `Property ${JSON.stringify(key)} was accessed during render ` +
           `but is not defined on instance.`
