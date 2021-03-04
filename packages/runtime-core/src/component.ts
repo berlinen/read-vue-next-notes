@@ -436,6 +436,7 @@ function setupStatefulComponent(
       setup,
       instance,
       ErrorCodes.SETUP_FUNCTION,
+      // 所以 setup 的第一个参数是 instance.props，第二个参数是 setupContext。
       [__DEV__ ? shallowReadonly(instance.props) : instance.props, setupContext]
     )
     resetTracking()
@@ -467,7 +468,16 @@ function setupStatefulComponent(
     finishComponentSetup(instance, isSSR)
   }
 }
-
+/**
+ * @desc
+ * handleSetupResult  处理 setup 函数的执行结果
+ *
+ * setupResult 是一个对象的时候，我们把它变成了响应式并赋值给 instance.setupState
+ * 依据前面的代理规则，instance.ctx 就可以从 instance.setupState 上获取到对应的数据，这就在 setup 函数与模板渲染间建立了联系。
+ * @param instance
+ * @param setupResult
+ * @param isSSR
+ */
 export function handleSetupResult(
   instance: ComponentInternalInstance,
   setupResult: unknown,
@@ -475,6 +485,7 @@ export function handleSetupResult(
 ) {
   if (isFunction(setupResult)) {
     // setup returned an inline render function
+    // setup 返回渲染函数
     instance.render = setupResult as RenderFunction
   } else if (isObject(setupResult)) {
     if (__DEV__ && isVNode(setupResult)) {
@@ -485,6 +496,7 @@ export function handleSetupResult(
     }
     // setup returned bindings.
     // assuming a render function compiled from template is present.
+    // 把 setup 返回结果变成响应式
     instance.setupState = reactive(setupResult)
     if (__DEV__) {
       exposeSetupStateOnRenderContext(instance)
@@ -593,7 +605,18 @@ const attrHandlers: ProxyHandler<Data> = {
     return false
   }
 }
-
+/**
+ * @description
+ * 创建setupContext => 对应的就是 setup 函数第二个参数
+ * return {
+ *  attrs, slots, emit
+ * }
+ * 返回了一个对象，包括 attrs、slots 和 emit 三个属性。setupContext 让我们在 setup 函数内部可以获取到组件的属性、插槽以及派发事件的方法 emit。
+ *
+ * 这个 setupContext 对应的就是 setup 函数第二个参数
+ *
+ * @param instance
+ */
 function createSetupContext(instance: ComponentInternalInstance): SetupContext {
   if (__DEV__) {
     // We use getters in dev in case libs like test-utils overwrite instance
