@@ -230,10 +230,19 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
     }
   },
   /**
-   * 
-   * @param param0 
-   * @param key 
-   * @param value 
+   * @description
+   * 当我们修改 instance.ctx 渲染上下文中的属性的时候，
+   * 函数主要做的事情就是对渲染上下文 instance.ctx 中的属性赋值
+   * 它实际上是代理到对应的数据类型中去完成赋值操作的。
+   * 仍然要注意顺序问题，和 get 一样，优先判断 setupState，然后是 data，接着是 props。
+   *
+   * @example
+   * 如果是用户自定义的数据，比如在 created 生命周期内定义的数据 它仅用于组件上下文的共享
+   * 当执行 this.userMsg 赋值的时候，会触发 set 函数，最终 userMsg 会被保留到 ctx 中。
+   *
+   * @param param0
+   * @param key
+   * @param value
    */
   set(
     { _: instance }: ComponentRenderContext,
@@ -242,10 +251,13 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
   ): boolean {
     const { data, setupState, ctx } = instance
     if (setupState !== EMPTY_OBJ && hasOwn(setupState, key)) {
+      // 给 setupState 赋值
       setupState[key] = value
     } else if (data !== EMPTY_OBJ && hasOwn(data, key)) {
+      // 给 data 赋值
       data[key] = value
     } else if (key in instance.props) {
+      // 不能直接给 props 赋值
       __DEV__ &&
         warn(
           `Attempting to mutate prop "${key}". Props are readonly.`,
@@ -253,6 +265,7 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
         )
       return false
     }
+    // 不能给 Vue 内部以 $ 开头的保留属性赋值
     if (key[0] === '$' && key.slice(1) in instance) {
       __DEV__ &&
         warn(
@@ -269,12 +282,17 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
           value
         })
       } else {
+         // 用户自定义数据赋值
         ctx[key] = value
       }
     }
     return true
   },
-
+  /**
+   * 
+   * @param param0 
+   * @param key 
+   */
   has(
     {
       _: { data, setupState, accessCache, ctx, type, appContext }
