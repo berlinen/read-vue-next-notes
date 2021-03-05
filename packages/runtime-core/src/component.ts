@@ -522,7 +522,13 @@ let compile: CompileFunction | undefined
 export function registerRuntimeCompiler(_compile: any) {
   compile = _compile
 }
-
+/**
+ * @description
+ * 完成组件设置实例
+ * 标准化模版或者渲染函数和兼容Options Api
+ * @param instance
+ * @param isSSR
+ */
 function finishComponentSetup(
   instance: ComponentInternalInstance,
   isSSR: boolean
@@ -535,10 +541,12 @@ function finishComponentSetup(
       instance.render = Component.render as RenderFunction
     }
   } else if (!instance.render) {
+    // 对模板或者渲染函数的标准化
     if (compile && Component.template && !Component.render) {
       if (__DEV__) {
         startMeasure(instance, `compile`)
       }
+      // 运行时编译
       Component.render = compile(Component.template, {
         isCustomElement: instance.appContext.config.isCustomElement || NO
       })
@@ -551,6 +559,7 @@ function finishComponentSetup(
 
     if (__DEV__ && !Component.render) {
       /* istanbul ignore if */
+      // 只编写了 template 但使用了 runtime-only 的版本
       if (!compile && Component.template) {
         warn(
           `Component provided template option but ` +
@@ -564,16 +573,18 @@ function finishComponentSetup(
                   : ``) /* should not happen */
         )
       } else {
+       // 既没有写 render 函数，也没有写 template 模板
         warn(`Component is missing template or render function.`)
       }
     }
-
+    // 组件对象的 render 函数赋值给 instance
     instance.render = (Component.render || NOOP) as RenderFunction
 
     // for runtime-compiled render functions using `with` blocks, the render
     // proxy used needs a different `has` handler which is more performant and
     // also only allows a whitelist of globals to fallthrough.
     if (instance.render._rc) {
+      // 对于使用 with 块的运行时编译的渲染函数，使用新的渲染上下文的代理
       instance.withProxy = new Proxy(
         instance.ctx,
         RuntimeCompiledPublicInstanceProxyHandlers
@@ -582,6 +593,7 @@ function finishComponentSetup(
   }
 
   // support for 2.x options
+  // 兼容 Vue.js 2.x Options API
   if (__FEATURE_OPTIONS__) {
     currentInstance = instance
     applyOptions(instance, Component)
