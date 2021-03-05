@@ -519,6 +519,7 @@ type CompileFunction = (
 let compile: CompileFunction | undefined
 
 // exported method uses any to avoid d.ts relying on the compiler types.
+// compile 方法是通过外部注册的
 export function registerRuntimeCompiler(_compile: any) {
   compile = _compile
 }
@@ -526,6 +527,15 @@ export function registerRuntimeCompiler(_compile: any) {
  * @description
  * 完成组件设置实例
  * 标准化模版或者渲染函数和兼容Options Api
+ *
+ * 1. 标准化模版或者渲染函数
+ * 1) compile 和组件 template 属性存在，render 方法不存在的情况。此时， runtime-compiled 版本会在 JavaScript 运行时进行模板编译，生成 render 函数。
+ *
+ * 2) compile 和 render 方法不存在，组件 template 属性存在的情况。此时由于没有 compile，这里用的是 runtime-only 的版本，因此要报一个警告来告诉用户，想要运行时编译得使用 runtime-compiled 版本的 Vue.js。
+ *
+ *3) 组件既没有写 render 函数，也没有写 template 模板，此时要报一个警告，告诉用户组件缺少了 render 函数或者 template 模板。
+
+ 把组件的 render 函数赋值给 instance.render。到了组件渲染的时候，就可以运行 instance.render 函数生成组件的子树 vnode 
  * @param instance
  * @param isSSR
  */

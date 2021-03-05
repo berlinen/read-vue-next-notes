@@ -262,7 +262,15 @@ function createDuplicateChecker() {
 }
 
 type DataFn = (vm: ComponentPublicInstance) => any
-
+/**
+ * @description
+ *  兼容vue2 options api 这主要就是通过 applyOptions方法实现的
+ * @param instance
+ * @param options
+ * @param deferredData
+ * @param deferredWatch
+ * @param asMixin
+ */
 export function applyOptions(
   instance: ComponentInternalInstance,
   options: ComponentOptions,
@@ -272,9 +280,12 @@ export function applyOptions(
 ) {
   const {
     // composition
+    // 组合
     mixins,
+    //
     extends: extendsOptions,
     // state
+    // 数组状态
     props: propsOptions,
     data: dataOptions,
     computed: computedOptions,
@@ -283,9 +294,11 @@ export function applyOptions(
     provide: provideOptions,
     inject: injectOptions,
     // assets
+    // 组件和指令
     components,
     directives,
     // lifecycle
+    // 生命周期
     beforeMount,
     mounted,
     beforeUpdate,
@@ -298,11 +311,25 @@ export function applyOptions(
     renderTriggered,
     errorCaptured
   } = options
-
+  // instance.proxy 作为this
   const publicThis = instance.proxy!
+  // 记录实例原型
   const ctx = instance.ctx
   const globalMixins = instance.appContext.mixins
   // call it only during dev
+  // 处理全局 mixin
+  // 处理 extend
+  // 处理本地 mixins
+  // props 已经在外面处理过了
+  // 处理 inject
+  // 处理 方法
+  // 处理 data
+  // 处理计算属性
+  // 处理 watch
+  // 处理 provide
+  // 处理组件
+  // 处理指令
+  // 处理生命周期 option
 
   // applyOptions is called non-as-mixin once per instance
   if (!asMixin) {

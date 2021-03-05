@@ -333,11 +333,15 @@ if (__DEV__ && !__TEST__) {
     return Reflect.ownKeys(target)
   }
 }
-
+/**
+ * @description
+ * 渲染上下文代理PublicInstanceProxyHandlers的基础上进行的扩展，主要对 has 函数的实现做了优化
+ */
 export const RuntimeCompiledPublicInstanceProxyHandlers = {
   ...PublicInstanceProxyHandlers,
   get(target: ComponentRenderContext, key: string) {
     // fast path for unscopables when using `with` block
+    // 如果 key 以 _ 开头或者 key 在全局变量白名单内，则 has 为 false
     if ((key as any) === Symbol.unscopables) {
       return
     }
