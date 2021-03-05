@@ -76,7 +76,11 @@ export function stop(effect: ReactiveEffect) {
 }
 
 let uid = 0
-
+/**
+ * @description
+ * @param fn
+ * @param options
+ */
 function createReactiveEffect<T = any>(
   fn: (...args: any[]) => T,
   options: ReactiveEffectOptions
