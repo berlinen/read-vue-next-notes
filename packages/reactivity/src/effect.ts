@@ -139,21 +139,38 @@ export function resetTracking() {
   const last = trackStack.pop()
   shouldTrack = last === undefined ? true : last
 }
-
+/**
+ * @description
+ * 当数据变化的时候可以自动做一些事情，比如执行某些函数，所以我们收集的依赖就是数据变化后执行的副作用函数。
+ * track 函数收集依赖
+ * 我们把 target 作为原始的数据，key 作为访问的属性。我们创建了全局的 targetMap 作为原始数据对象的 Map，它的键是 target，值是 depsMap，作为依赖的 Map；这个 depsMap 的键是 target 的 key，值是 dep 集合，dep 集合中存储的是依赖的副作用函数。
+ *
+ * 每次 track ，就是把当前激活的副作用函数 activeEffect 作为依赖，然后收集到 target 相关的 depsMap 对应 key 下的依赖集合 dep 中。
+ * @param target
+ * @param type
+ * @param key
+ */
 export function track(target: object, type: TrackOpTypes, key: unknown) {
+  // shouldTrack 是否应该收集依赖
+  // activeEffect 当前激活的 effect
   if (!shouldTrack || activeEffect === undefined) {
     return
   }
+  // targetMap 原始数据对象map
   let depsMap = targetMap.get(target)
   if (!depsMap) {
+    // 每个 target 对应一个 depsMap
     targetMap.set(target, (depsMap = new Map()))
   }
   let dep = depsMap.get(key)
   if (!dep) {
+    // 每个 key 对应一个 dep 集合
     depsMap.set(key, (dep = new Set()))
   }
   if (!dep.has(activeEffect)) {
+    // 收集当前激活的 effect 作为依赖
     dep.add(activeEffect)
+    // 当前激活的 effect 收集 dep 集合作为依赖
     activeEffect.deps.push(dep)
     if (__DEV__ && activeEffect.options.onTrack) {
       activeEffect.options.onTrack({
