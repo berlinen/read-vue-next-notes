@@ -43,6 +43,18 @@ export interface WritableComputedOptions<T> {
  * 第一个 dirty 表示一个计算属性的值是否是“脏的”，用来判断需不需要重新计算，
  * 第二个 value 表示计算属性每次计算后的结果。
  *
+ * @expa
+ *
+ *  computed 计算属性有两个特点：
+ *
+ *  1. 只有当我们访问计算属性的时候，它才会真正运行 computed getter 函数计算；
+ *
+ *  2. 缓存，它的内部会缓存上次的计算结果 value，而且只有 dirty 为 true 时才会重新计算。如果访问计算属性时 dirty 为 false，那么直接返回这个 value。
+ *
+ * @goods
+ *
+ * 计算属性的优势是：只要依赖不变化，就可以使用缓存的 value 而不用每次在渲染组件的时候都执行函数去计算，这是典型的空间换时间的优化思想。
+ *
  * @param getter
  */
 export function computed<T>(getter: ComputedGetter<T>): ComputedRef<T>

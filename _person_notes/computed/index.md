@@ -78,3 +78,36 @@ export default {
 请注意，由于是在 runner 执行的时候访问 count，所以这个时候的 activeEffect 是 runner 函数。runner 函数执行完毕，会把 dirty 设置为 false，并进一步执行 track（computed,"get",'value') 函数做依赖收集，这个时候 runner 已经执行完了，所以 activeEffect 是组件副作用渲染函数。
 
 所以你要特别注意这是两个依赖收集过程：对于 plusOne 来说，它收集的依赖是组件副作用渲染函数；对于 count 来说，它收集的依赖是 plusOne 内部的 runner 函数。
+
+然后当我们点击按钮的时候，会执行 plus 函数，函数内部通过 count.value++ 修改 count 的值，并派发通知。请注意，这里不是直接调用 runner 函数，而是把 runner 作为参数去执行 scheduler 函数。我们来回顾一下 trigger 函数内部对于 effect 函数的执行方式:
+
+```js
+const run = (effect) => {
+  // 调度执行
+  if (effect.options.scheduler) {
+    effect.options.scheduler(effect)
+  }
+  else {
+    // 直接运行
+    effect()
+  }
+}
+```
+
+computed API 内部创建副作用函数时，已经配置了 scheduler 函数，如下：
+
+```js
+scheduler: () => {
+  if (!dirty) {
+    dirty = true
+    // 派发通知，通知运行访问该计算属性的 activeEffect
+    trigger(computed, "set" /* SET */, 'value')
+  }
+}
+```
+
+它并没有对计算属性求新值，而仅仅是把 dirty 设置为 true，再执行 trigger(computed, "set" , 'value')，去通知执行 plusOne 依赖的组件渲染副作用函数，即触发组件的重新渲染。
+
+在组件重新渲染的时候，会再次访问 plusOne，我们发现这个时候 dirty 为 true，然后会再次执行 computed getter，此时才会执行 count.value + 1 求得新值。这就是虽然组件没有直接访问 count，但是当我们修改 count 的值的时候，组件仍然会重新渲染的原因。
+
+![avatar](/_person_notes/images/computed.png);
