@@ -109,7 +109,13 @@ function createGetter(isReadonly = false, shallow = false) {
 
 const set = /*#__PURE__*/ createSetter()
 const shallowSet = /*#__PURE__*/ createSetter(true)
-
+/**
+ * @description
+ * 派发通知 set函数
+ * 派发通知发生在数据更新的阶段， 由于我们用 Proxy API 劫持了数据对象，所以当这个响应式对象属性更新的时候就会执行 set 函数。
+ * 1. 通过 Reflect.set 求值  2. 通过 trigger 函数派发通知 
+ * @param shallow
+ */
 function createSetter(shallow = false) {
   return function set(
     target: object,
@@ -131,6 +137,7 @@ function createSetter(shallow = false) {
     const hadKey = hasOwn(target, key)
     const result = Reflect.set(target, key, value, receiver)
     // don't trigger if target is something up in the prototype chain of original
+     // 如果目标的原型链也是一个 proxy，通过 Reflect.set 修改原型链上的属性会再次触发 setter，这种情况下就没必要触发两次 trigger 了
     if (target === toRaw(receiver)) {
       if (!hadKey) {
         trigger(target, TriggerOpTypes.ADD, key, value)

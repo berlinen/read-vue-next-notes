@@ -50,16 +50,26 @@ export const MAP_KEY_ITERATE_KEY = Symbol(__DEV__ ? 'Map key iterate' : '')
 export function isEffect(fn: any): fn is ReactiveEffect {
   return fn && fn._isEffect === true
 }
-
+/**
+ * @description
+ * effect 副作用函数
+ * @param fn
+ * @param options
+ */
+// effectStack 全局 effect 栈
+// activeEffect 当前激活的 effect
 export function effect<T = any>(
   fn: () => T,
   options: ReactiveEffectOptions = EMPTY_OBJ
 ): ReactiveEffect<T> {
   if (isEffect(fn)) {
+    // 如果 fn 已经是一个 effect 函数了，则指向原始函数
     fn = fn.raw
   }
+  // 创建一个 wrapper，它是一个响应式的副作用的函数
   const effect = createReactiveEffect(fn, options)
   if (!options.lazy) {
+    // lazy 配置，计算属性会用到，非 lazy 则直接执行一次
     effect()
   }
   return effect
@@ -78,6 +88,24 @@ export function stop(effect: ReactiveEffect) {
 let uid = 0
 /**
  * @description
+ * 创建一个 wrapper，它是一个响应式的副作用的函数
+ * effect 内部通过执行 createReactiveEffect 函数去创建一个新的 effect 函数，为了和外部的 effect 函数区分，我们把它称作 reactiveEffect 函数，并且还给它添加了一些额外属性
+ *
+ * 这个 reactiveEffect 函数就是响应式的副作用函数，当执行 trigger 过程派发通知的时候，执行的 effect 就是它。
+ *
+ * reactiveEffect 函数
+ *
+ * 针对嵌套 effect 的场景，我们不能简单地赋值 activeEffect，应该考虑到函数的执行本身就是一种入栈出栈操作，因此我们也可以设计一个 effectStack，这样每次进入 reactiveEffect 函数就先把它入栈，然后 activeEffect 指向这个 reactiveEffect 函数，接着在 fn 执行完毕后出栈，再把 activeEffect 指向 effectStack 最后一个元素，也就是外层 effect 函数对应的 reactiveEffect。‘’
+ *
+ * 在入栈前会执行 cleanup 函数清空 reactiveEffect 函数对应的依赖 。在执行 track 函数的时候，除了收集当前激活的 effect 作为依赖，还通过 activeEffect.deps.push(dep) 把 dep 作为 activeEffect 的依赖，这样在 cleanup 的时候我们就可以找到 effect 对应的 dep 了，然后把 effect 从这些 dep 中删除。
+ *
+ * 1。 首先它会判断 effect 的状态是否是 active，允许在非 active 状态且非调度执行情况，则直接执行原始函数 fn 并返回，
+ *
+ * 2. 判断 effectStack 中是否包含 effect，如果没有就把 effect 压入栈内
+ *
+ * 2.  把全局的 activeEffect 指向它 ，
+ *
+ * 2. 执行被包装的原始函数 fn
  * @param fn
  * @param options
  */
@@ -87,31 +115,48 @@ function createReactiveEffect<T = any>(
 ): ReactiveEffect<T> {
   const effect = function reactiveEffect(...args: unknown[]): unknown {
     if (!effect.active) {
+      // 非激活状态，则判断如果非调度执行，则直接执行原始函数。
       return options.scheduler ? undefined : fn(...args)
     }
     if (!effectStack.includes(effect)) {
+      // 清空 effect 引用的依赖
       cleanup(effect)
       try {
+        // 开启全局 shouldTrack，允许依赖收集
         enableTracking()
+        // 压栈
         effectStack.push(effect)
         activeEffect = effect
+        // 执行原始函数
         return fn(...args)
       } finally {
+        // 出栈
         effectStack.pop()
+        // 恢复 shouldTrack 开启之前的状态
         resetTracking()
+         // 指向栈最后一个 effect
         activeEffect = effectStack[effectStack.length - 1]
       }
     }
   } as ReactiveEffect
+
   effect.id = uid++
+   // 标识是一个 effect 函数
   effect._isEffect = true
+   // effect 自身的状态
   effect.active = true
+  // 包装的原始函数
   effect.raw = fn
+  // effect 对应的依赖，双向指针，依赖包含对 effect 的引用，effect 也包含对依赖的引用
   effect.deps = []
+  // effect 的相关配置
   effect.options = options
   return effect
 }
-
+/**
+ *
+ * @param effect
+ */
 function cleanup(effect: ReactiveEffect) {
   const { deps } = effect
   if (deps.length) {
@@ -171,6 +216,7 @@ export function track(target: object, type: TrackOpTypes, key: unknown) {
     // 收集当前激活的 effect 作为依赖
     dep.add(activeEffect)
     // 当前激活的 effect 收集 dep 集合作为依赖
+    // 目的在 cleanup 的时候我们就可以找到 effect 对应的 dep 了，然后把 effect 从这些 dep 中删除。
     activeEffect.deps.push(dep)
     if (__DEV__ && activeEffect.options.onTrack) {
       activeEffect.options.onTrack({
@@ -182,7 +228,22 @@ export function track(target: object, type: TrackOpTypes, key: unknown) {
     }
   }
 }
-
+/**
+ * @description
+ * trigger 函数派发通知
+ * 1. 通过 targetMap 拿到 target 对应的依赖集合 depsMap；
+ * 2. 创建运行的 effects 集合；
+ * 3. 根据 key 从 depsMap 中找到对应的 effects 添加到 effects 集合；
+ * 4. 遍历 effects 执行相关的副作用函数。
+ *
+ * 所以每次 trigger 函数就是根据 target 和 key ，从 targetMap 中找到相关的所有副作用函数遍历执行一遍。
+ * @param target
+ * @param type
+ * @param key
+ * @param newValue
+ * @param oldValue
+ * @param oldTarget
+ */
 export function trigger(
   target: object,
   type: TriggerOpTypes,
@@ -191,14 +252,18 @@ export function trigger(
   oldValue?: unknown,
   oldTarget?: Map<unknown, unknown> | Set<unknown>
 ) {
+  // targetMap 原始数据对象 map
+  // 通过 targetMap 拿到 target 对应的依赖集合
   const depsMap = targetMap.get(target)
   if (!depsMap) {
     // never been tracked
+    // 没有依赖，直接返回
     return
   }
-
+  // 创建运行的 effects 集合
   const effects = new Set<ReactiveEffect>()
   const computedRunners = new Set<ReactiveEffect>()
+  // 添加 effects 的函数
   const add = (effectsToAdd: Set<ReactiveEffect> | undefined) => {
     if (effectsToAdd) {
       effectsToAdd.forEach(effect => {
@@ -229,6 +294,7 @@ export function trigger(
     })
   } else {
     // schedule runs for SET | ADD | DELETE
+    // SET | ADD | DELETE 操作之一，添加对应的 effects
     if (key !== void 0) {
       add(depsMap.get(key))
     }
@@ -259,9 +325,11 @@ export function trigger(
         oldTarget
       })
     }
+    // 调度执行
     if (effect.options.scheduler) {
       effect.options.scheduler(effect)
     } else {
+      // 直接运行
       effect()
     }
   }
@@ -269,5 +337,6 @@ export function trigger(
   // Important: computed effects must be run first so that computed getters
   // can be invalidated before any normal effects that depend on them are run.
   computedRunners.forEach(run)
+  // 遍历执行 effects
   effects.forEach(run)
 }
