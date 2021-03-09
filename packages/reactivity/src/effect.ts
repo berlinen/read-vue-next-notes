@@ -268,6 +268,7 @@ export function trigger(
     if (effectsToAdd) {
       effectsToAdd.forEach(effect => {
         if (effect !== activeEffect || !shouldTrack) {
+          // 我们会判断每一个 effect 是不是一个 computed effect，如果是的话会添加到 computedRunners 中，在后面运行的时候会优先执行 computedRunners，然后再执行普通的 effects。
           if (effect.options.computed) {
             computedRunners.add(effect)
           } else {
@@ -336,6 +337,7 @@ export function trigger(
 
   // Important: computed effects must be run first so that computed getters
   // can be invalidated before any normal effects that depend on them are run.
+  // 优先执行computed队列
   computedRunners.forEach(run)
   // 遍历执行 effects
   effects.forEach(run)
