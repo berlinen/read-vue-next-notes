@@ -152,6 +152,12 @@ export function shallowReadonly<T extends object>(
  *
  * 这就是前面“对同一个原始数据多次执行 reactive ，那么会返回相同的响应式对象”逻辑的判断依据
  *
+ * @readonly
+ *
+ * readonly 和 reactive 函数的主要区别，就是执行 createReactiveObject 函数时的参数 isReadonly 不同。
+ *
+ * 
+ *
  * @param target
  * @param toProxy
  * @param toRaw

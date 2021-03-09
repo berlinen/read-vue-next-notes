@@ -27,7 +27,10 @@ export function isRef<T>(r: Ref<T> | unknown): r is Ref<T>
 export function isRef(r: any): r is Ref {
   return r ? r._isRef === true : false
 }
-
+/**
+ * 创建ref响应式
+ * @param value
+ */
 export function ref<T extends object>(
   value: T
 ): T extends Ref ? T : Ref<UnwrapRef<T>>
@@ -42,22 +45,39 @@ export function shallowRef<T = any>(): Ref<T | undefined>
 export function shallowRef(value?: unknown) {
   return createRef(value, true)
 }
-
+/**
+ * @description
+ * 创建ref模式
+ * 1. 函数首先处理了嵌套 ref 的情况，如果传入的 rawValue 也是 ref，那么直接返回
+ *
+ * 2. 接着对 rawValue 做了一层转换，如果 rawValue 是对象或者数组类型，那么把它转换成一个 reactive 对象
+ *
+ * 3. 最后定义一个对 value 属性做 getter 和 setter 劫持的对象并返回，get 部分就是执行 track 函数做依赖收集然后返回它的值；set 部分就是设置新值并且执行 trigger 函数派发通知。
+ * @param rawValue
+ * @param shallow
+ */
 function createRef(rawValue: unknown, shallow = false) {
   if (isRef(rawValue)) {
+    // 如果传入的就是一个 ref，那么返回自身即可，处理嵌套 ref 的情况。
     return rawValue
   }
+  // 如果是对象或者数组类型，则转换一个 reactive 对象。
   let value = shallow ? rawValue : convert(rawValue)
   const r = {
     _isRef: true,
     get value() {
+      // getter
+      // 依赖收集，key 为固定的 value
       track(r, TrackOpTypes.GET, 'value')
       return value
     },
     set value(newVal) {
+      // setter，只处理 value 属性的修改
       if (hasChanged(toRaw(newVal), rawValue)) {
+        // 判断有变化后更新值
         rawValue = newVal
         value = shallow ? newVal : convert(newVal)
+        // 派发通知
         trigger(
           r,
           TriggerOpTypes.SET,

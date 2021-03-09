@@ -61,6 +61,7 @@ const arrayInstrumentations: Record<string, Function> = {}
  * 但是 Object.defineProperty 是在 初始化阶段，  即定义劫持对象的时候就已经递归执行了，而 Proxy 是在对象属性被访问的时候才递归执行下一步 reactive，这其实是一种延时定义子对象响应式的实现，在性能上会有较大的提升。
  *
  * @param isReadonly
+ * 它和 reactive API 最大的区别就是不做依赖收集了，这一点也非常好理解，因为它的属性不会被修改，所以就不用跟踪它的变化了。
  * @param shallow
  */
 function createGetter(isReadonly = false, shallow = false) {
@@ -79,6 +80,7 @@ function createGetter(isReadonly = false, shallow = false) {
 
     if (shallow) {
       // 代理 observed.__v_isReadonly
+      // isReadonly 为 true 则不需要依赖收集
       !isReadonly && track(target, TrackOpTypes.GET, key)
       return res
     }
@@ -99,6 +101,7 @@ function createGetter(isReadonly = false, shallow = false) {
       ? isReadonly
         ? // need to lazy access readonly and reactive here to avoid
           // circular dependency
+          // 如果 res 是个对象或者数组类型，则递归执行 readonly 函数把 res readonly
           readonly(res)
          // 如果 res 是个对象或者数组类型，则递归执行 reactive 函数把 res 变成响应式
          // 如果它也是数组或对象，则递归执行 reactive 把 res 变成响应式对象。
@@ -113,7 +116,7 @@ const shallowSet = /*#__PURE__*/ createSetter(true)
  * @description
  * 派发通知 set函数
  * 派发通知发生在数据更新的阶段， 由于我们用 Proxy API 劫持了数据对象，所以当这个响应式对象属性更新的时候就会执行 set 函数。
- * 1. 通过 Reflect.set 求值  2. 通过 trigger 函数派发通知 
+ * 1. 通过 Reflect.set 求值  2. 通过 trigger 函数派发通知
  * @param shallow
  */
 function createSetter(shallow = false) {
@@ -179,7 +182,11 @@ export const mutableHandlers: ProxyHandler<object> = {
   has,
   ownKeys
 }
-
+/**
+ * @description
+ * 处理readony reactive
+ * readonlyHandlers 和 mutableHandlers 的区别主要在 get、set 和 deleteProperty 三个函数上。很显然，作为一个只读的响应式对象，是不允许修改属性以及删除属性的，所以在非生产环境下 set 和 deleteProperty 函数的实现都会报警告，提示用户 target 是 readonly 的。
+ */
 export const readonlyHandlers: ProxyHandler<object> = {
   get: readonlyGet,
   has,
