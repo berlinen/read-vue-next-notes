@@ -130,9 +130,39 @@ export function watch<T = any>(
  *
  *     当我们执行 watch 函数的时候，我们知道如果侦听的是一个 reactive 对象，那么内部会设置 deep 为 true，然后执行 traverse 去递归访问对象深层子属性，
  * 2. 构造 applyCb 回调函数
+ *
+ *    1. cb 是一个回调函数，它有三个参数：第一个 newValue 代表新值；第二个 oldValue 代表旧值。第三个参数 onInvalidate
+ *
+ *    首先，watch API 和组件实例相关，因为通常我们会在组件的 setup 函数中使用它，当组件销毁后，回调函数 cb 不应该被执行而是直接返回。
+ *
+ *    接着，执行 runner 求得新值，这里实际上就是执行前面创建的 getter 函数求新值。
+ *
+ *    如果是 deep 的情况或者新旧值发生了变化，则执行回调函数 cb，传入参数 newValue 和 oldValue。注意，第一次执行的时候旧值的初始值是空数组或者 undefined。执行完回调函数 cb 后，把旧值 oldValue 再更新为 newValue，这是为了下一次的比对。
  * 3. 创建 scheduler 时序执行函数
+ *    scheduler 的作用是根据某种调度的方式去执行某种函数，在 watch API 中，主要影响到的是回调函数的执行方式。
+ *    scheduler 的创建逻辑受到了第三个参数 Options 中的 flush 属性值的影响，不同的 flush 决定了 watcher 的执行时机。
+ *    当 flush 为 sync 的时候，表示它是一个同步 watcher，即当数据变化时同步执行回调函数。
+ *    当 flush 为 pre 的时候，回调函数通过 queueJob 的方式在组件更新之前执行，如果组件还没挂载，则同步执行确保回调函数在组件挂载之前执行。
+ *    如果没设置 flush，那么回调函数通过 queuePostRenderEffect 的方式在组件更新之后执行。
+ *
+ *    queueJob:
+ *
+ *    queuePostRenderEffect:
+ *
+ *
  * 4. 创建 effect 副作用函数
+ *
+ *    runner 是一个 computed effect。。因为 computed effect 可以优先于普通的 effect（比如组件渲染的 effect）先运行，这样就可以实现当配置 flush 为 pre 的时候，watcher 的执行可以优先于组件更新。
+ *
+ *    runner 执行的方式。runner 是 lazy 的，它不会在创建后立刻执行。第一次手动执行 runner 会执行前面的 getter 函数，访问响应式数据并做依赖收集。注意，此时activeEffect 就是 runner，这样在后面更新响应式数据时，就可以触发 runner 执行 scheduler 函数，以一种调度方式来执行回调函数。
+ *
+ *    runner 的返回结果。手动执行 runner 就相当于执行了前面标准化的 getter 函数，getter 函数的返回值就是 watcher 计算出的值，所以我们第一次执行 runner 求得的值可以作为 oldValue。
+ *
+ *    配置了 immediate 的情况。当我们配置了 immediate ，创建完 watcher 会立刻执行 applyCb 函数，此时 oldValue 还是初始值，在 applyCb 执行时也会执行 runner 进而执行前面的 getter 函数做依赖收集，求得新值。
+ *
  * 5. 返回侦听器销毁函数
+ *
+ *  销毁函数内部会执行 stop 方法让 runner 失活，并清理 runner 的相关依赖，这样就可以停止对数据的侦听。并且，如果是在组件中注册的 watcher，也会移除组件 effects 对这个 runner 的引用。
  * @param source // getter
  * @param cb
  * @param param2
@@ -202,6 +232,7 @@ function doWatch(
   }
 
   let cleanup: () => void
+  // 注册无效回调函数
   const onInvalidate: InvalidateCbRegistrator = (fn: () => void) => {
     cleanup = runner.options.onStop = () => {
       callWithErrorHandling(fn, instance, ErrorCodes.WATCH_CLEANUP)
@@ -222,25 +253,31 @@ function doWatch(
     }
     return NOOP
   }
-
+   // 旧值初始值
   let oldValue = isArray(source) ? [] : INITIAL_WATCHER_VALUE
+  // 回调函数
   const applyCb = cb
     ? () => {
+        // 组件销毁，则直接返回
         if (instance && instance.isUnmounted) {
           return
         }
+        // 求得新值
         const newValue = runner()
         if (deep || hasChanged(newValue, oldValue)) {
           // cleanup before running cb again
+          // 执行清理函数
           if (cleanup) {
             cleanup()
           }
           callWithAsyncErrorHandling(cb, instance, ErrorCodes.WATCH_CALLBACK, [
             newValue,
             // pass undefined as the old value when it's changed for the first time
+            // 第一次更改时传递旧值为 undefined
             oldValue === INITIAL_WATCHER_VALUE ? undefined : oldValue,
             onInvalidate
           ])
+          // 更新旧值
           oldValue = newValue
         }
       }
@@ -248,46 +285,56 @@ function doWatch(
 
   let scheduler: (job: () => any) => void
   if (flush === 'sync') {
+    // 同步
     scheduler = invoke
   } else if (flush === 'pre') {
     scheduler = job => {
       if (!instance || instance.isMounted) {
+        // 进入异步队列，组件更新前执行
         queueJob(job)
       } else {
         // with 'pre' option, the first call must happen before
         // the component is mounted so it is called synchronously.
+        // 如果组件还没挂载，则同步执行确保在组件挂载前
         job()
       }
     }
   } else {
+     // 进入异步队列，组件更新后执行
     scheduler = job => queuePostRenderEffect(job, instance && instance.suspense)
   }
 
   const runner = effect(getter, {
+    // 延时执行
     lazy: true,
     // so it runs before component update effects in pre flush mode
+    // computed effect 可以优先于普通的 effect 先运行，比如组件渲染的 effect
     computed: true,
     onTrack,
     onTrigger,
     scheduler: applyCb ? () => scheduler(applyCb) : scheduler
   })
-
+   // 在组件实例中记录这个 effect
   recordInstanceBoundEffect(runner)
 
   // initial run
+  // 初次执行
   if (applyCb) {
     if (immediate) {
       applyCb()
     } else {
+      // 求旧值
       oldValue = runner()
     }
   } else {
+    // 没有 cb 的情况
     runner()
   }
-
+  // 最后，会返回侦听器销毁函数，也就是 watch API 执行后返回的函数。我们可以通过调用它来停止 watcher 对数据的侦听。
   return () => {
     stop(runner)
     if (instance) {
+      // 移除组件 effects 对这个 runner 的引用
       remove(instance.effects!, runner)
     }
   }
