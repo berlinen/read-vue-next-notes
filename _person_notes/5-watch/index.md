@@ -31,3 +31,28 @@ watch([count, count2], ([count, count2], [prevCount, prevCount2]) => {
 ```
 
 ### watch API 实现原理
+
+
+### dep
+```vue
+<script>
+import { reactive, watch } from 'vue'
+const state = reactive({
+  count: {
+    a: {
+      b: 1
+    }
+  }
+})
+watch(state.count, (count, prevCount) => {
+  console.log(count)
+})
+state.count.a.b = 2
+</script>
+```
+
+这里，我们利用 reactive API 创建了一个嵌套层级较深的响应式对象 state，然后再调用 watch API 侦听 state.count 的变化。接下来我们修改内部属性 state.count.a.b 的值，你会发现 watcher 的回调函数执行了，为什么会执行呢？
+
+。而从上述业务代码来看，我们修改 state.count.a.b 的值时并没有访问它 ，但还是触发了 watcher 的回调函数。
+
+当我们执行 watch 函数的时候，我们知道如果侦听的是一个 reactive 对象，那么内部会设置 deep 为 true，然后执行 traverse 去递归访问对象深层子属性，这个时候就会访问 state.count.a.b 触发依赖收集，这里收集的依赖是 watcher 内部创建的 effect runner。因此，当我们再去修改 state.count.a.b 的时候，就会通知这个 effect ，所以最终会执行 watcher 的回调函数

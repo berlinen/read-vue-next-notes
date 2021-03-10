@@ -115,7 +115,28 @@ export function watch<T = any>(
   }
   return doWatch(source, cb, options)
 }
-
+/**
+ * @description
+ * 解析watch
+ * 1. 标准化 source
+ * source 标准化主要是根据 source 的类型
+ *    1. 如果 source 是 ref 对象，则创建一个访问 source.value 的 getter 函数;
+ *
+ *    2. 如果 source 是 reactive 对象，则创建一个访问 source 的 getter 函数，并设置 deep 为 true
+ *
+ *    3. 如果 source 是一个函数，则会进一步判断第二个参数 cb 是否存在，对于 watch API 来说，cb 是一定存在且是 一个回调函数，这种情况下，getter 就是一个简单的对 source 函数封装的函数。
+ *
+ *    最终标准化生成的 getter 函数，它会返回一个响应式对象，在后续创建 effect runner 副作用函数需要用到，每次执行 runner 就会把 getter 函数返回的响应式对象作为 watcher 求值的结果，
+ *
+ *     当我们执行 watch 函数的时候，我们知道如果侦听的是一个 reactive 对象，那么内部会设置 deep 为 true，然后执行 traverse 去递归访问对象深层子属性，
+ * 2. 构造 applyCb 回调函数
+ * 3. 创建 scheduler 时序执行函数
+ * 4. 创建 effect 副作用函数
+ * 5. 返回侦听器销毁函数
+ * @param source // getter
+ * @param cb
+ * @param param2
+ */
 function doWatch(
   source: WatchSource | WatchSource[] | WatchEffect,
   cb: WatchCallback | null,
@@ -147,8 +168,10 @@ function doWatch(
             ? s.value
             : callWithErrorHandling(s, instance, ErrorCodes.WATCH_GETTER)
       )
+      // 判断是不是ref
   } else if (isRef(source)) {
     getter = () => source.value
+     // 判断getter是不是回调函数
   } else if (cb) {
     // getter with cb
     getter = () =>
@@ -170,7 +193,9 @@ function doWatch(
       )
     }
   }
-
+  // deep 为 true 的情况
+  // 此时，我们会发现生成的 getter 函数会被 traverse 函数包装一层
+  // traverse 函数的实现很简单，即通过递归的方式访问 value 的每一个子属性
   if (cb && deep) {
     const baseGetter = getter
     getter = () => traverse(baseGetter())
@@ -283,7 +308,12 @@ export function instanceWatch(
   onBeforeUnmount(stop, this)
   return stop
 }
-
+/**
+ * @description
+ * deep 为true 递归遍历getter去访问value的每一个子属性
+ * @param value
+ * @param seen
+ */
 function traverse(value: unknown, seen: Set<unknown> = new Set()) {
   if (!isObject(value) || seen.has(value)) {
     return value
