@@ -264,7 +264,7 @@ function createDevEffectOptions(
     onTrigger: instance.rtg ? e => invokeArrayFns(instance.rtg!, e) : void 0
   }
 }
-
+// 在不涉及 suspense 的情况下，queuePostRenderEffect 相当于 queuePostFlushCb
 export const queuePostRenderEffect = __FEATURE_SUSPENSE__
   ? queueEffectWithSuspense
   : queuePostFlushCb

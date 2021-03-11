@@ -301,6 +301,7 @@ function doWatch(
     }
   } else {
      // 进入异步队列，组件更新后执行
+     // 在不涉及 suspense 的情况下，queuePostRenderEffect 相当于 queuePostFlushCb，
     scheduler = job => queuePostRenderEffect(job, instance && instance.suspense)
   }
 
