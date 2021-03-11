@@ -207,14 +207,19 @@ function doWatch(
     getter = () =>
       callWithErrorHandling(source, instance, ErrorCodes.WATCH_GETTER)
   } else {
+    // 也走watchEffect
     // no cb -> simple effect
+    // 执行清理函数
     getter = () => {
+      // 它会先判断组件实例是否已经销毁，
       if (instance && instance.isUnmounted) {
         return
       }
+      // 每次执行 source 函数前执行 cleanup 清理函数。
       if (cleanup) {
         cleanup()
       }
+      // 执行 source 函数，传入 onInvalidate 作为参数
       return callWithErrorHandling(
         source,
         instance,
@@ -234,6 +239,11 @@ function doWatch(
   let cleanup: () => void
   // 注册无效回调函数
   const onInvalidate: InvalidateCbRegistrator = (fn: () => void) => {
+    // 执行 onInvalidate 的时候，就是注册了一个 cleanup 和 runner 的 onStop 方法，这个方法内部会执行 fn，也就是你注册的无效回调函数。
+
+    // 也就是说当响应式数据发生变化，会执行 cleanup 方法，当 watcher 被停止，会执行 onStop 方法，这两者都会执行注册的无效回调函数 fn。
+
+    // 通过这种方式，Vue.js 就很好地实现了 watcher 注册无效回调函数的需求。
     cleanup = runner.options.onStop = () => {
       callWithErrorHandling(fn, instance, ErrorCodes.WATCH_CLEANUP)
     }
