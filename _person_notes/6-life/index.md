@@ -41,3 +41,44 @@ errorCaptured -> onErrorCaptured
 ，Vue.js 3.0 还新增了两个用于调试的生命周期 API：onRenderTracked 和 onRenderTriggered。
 
 onRenderTracked 和 onRenderTriggered 是 Vue.js 3.0 新增的生命周期 API，它们是在开发阶段渲染调试用的。
+
+### 实际场景的应用：
+
+```vue
+<template>
+  <div>
+    <div>
+      <p>{{count}}</p>
+      <button @click="increase">Increase</button>
+    </div>
+  </div>
+</template>
+<script>
+import { ref, onRenderTracked, onRenderTriggered } from 'vue'
+
+export default {
+  setup() {
+    const count = ref(0);
+    function increase () {
+      count.value++
+    }
+    onRenderTracked(e) => {
+      console.log(e)
+      debugger
+    }
+    onRenderTriggered(e => {
+      console.log(e)
+      debugger
+    })
+    return {
+      count,
+      increase
+    }
+  }
+}
+</script>
+```
+
+像这样在开发阶段，我们可以通过注册这两个钩子函数，来追踪组件渲染的依赖来源以及触发组件重新渲染的数据更新来源。
+
+![avatar](/_person_notes/images/life.png);
