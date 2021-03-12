@@ -494,7 +494,15 @@ export const locStub: SourceLocation = {
   start: { line: 1, column: 1, offset: 0 },
   end: { line: 1, column: 1, offset: 0 }
 }
+/**
+ * @description
+ * 创建 AST 根节点了
+ * createRoot 的实现非常简单，它就是返回一个 JavaScript 对象，作为 AST 根节点。其中 type 表示它是一个根节点类型，children 是我们前面解析的子节点数组。除此之外，这个根节点还添加了其它的属性，当前我们并不需要搞清楚每一个属性代表的含义，这些属性我们在分析后续的处理流程中会介绍。
 
+
+ * @param children
+ * @param loc
+ */
 export function createRoot(
   children: TemplateChildNode[],
   loc = locStub

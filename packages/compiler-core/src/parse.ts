@@ -246,6 +246,7 @@ function parseChildren(
         const node = nodes[i]
         if (node.type === NodeTypes.TEXT) {
           if (!/[^\t\r\n\f ]/.test(node.content)) {
+            // 匹配空白字符
             const prev = nodes[i - 1]
             const next = nodes[i + 1]
             // If:
@@ -253,6 +254,10 @@ function parseChildren(
             // - the whitespace is adjacent to a comment, or:
             // - the whitespace is between two elements AND contains newline
             // Then the whitespace is ignored.
+            // 如果空白字符是开头或者结尾节点
+            // 或者空白字符与注释节点相连
+            // 或者空白字符在两个元素之间并包含换行符
+            // 那么这些空白字符节点都应该被移除
             if (
               !prev ||
               !next ||
@@ -267,23 +272,27 @@ function parseChildren(
             } else {
               // Otherwise, condensed consecutive whitespace inside the text down to
               // a single space
+              // 否则压缩这些空白字符到一个空格
               node.content = ' '
             }
           } else {
+            // 替换内容中的空白空间到一个空格
             node.content = node.content.replace(/[\t\r\n\f ]+/g, ' ')
           }
         }
       }
     } else if (parent && context.options.isPreTag(parent.tag)) {
+      // 生产环境移除注释节点
       // remove leading newline per html spec
       // https://html.spec.whatwg.org/multipage/grouping-content.html#the-pre-element
       const first = nodes[0]
+      // 根据 HTML 规范删除前导换行符
       if (first && first.type === NodeTypes.TEXT) {
         first.content = first.content.replace(/^\r?\n/, '')
       }
     }
   }
-
+  // 过滤空白字符节点
   return removedWhitespace ? nodes.filter(Boolean) : nodes
 }
 
@@ -413,7 +422,15 @@ function parseBogusComment(context: ParserContext): CommentNode | undefined {
     loc: getSelection(context, start)
   }
 }
-
+/**
+ * @description
+ * 解析元素
+ * 1 解析开始标签，
+ * 2 解析子节点，
+ * 3 解析闭合标签。
+ * @param context
+ * @param ancestors
+ */
 function parseElement(
   context: ParserContext,
   ancestors: ElementNode[]
@@ -421,27 +438,40 @@ function parseElement(
   __TEST__ && assert(/^<[a-z]/i.test(context.source))
 
   // Start tag.
+  // 是否在 pre 标签内
   const wasInPre = context.inPre
+  // 是否在 v-pre 指令内
   const wasInVPre = context.inVPre
+  // 获取当前元素的父标签节点
   const parent = last(ancestors)
+  // 解析开始标签，生成一个标签节点，并前进代码到开始标签后
   const element = parseTag(context, TagType.Start, parent)
+  // 是否在 pre 标签的边界
   const isPreBoundary = context.inPre && !wasInPre
+   // 是否在 v-pre 指令的边界
   const isVPreBoundary = context.inVPre && !wasInVPre
 
   if (element.isSelfClosing || context.options.isVoidTag(element.tag)) {
+    // 如果是自闭和标签，直接返回标签节点
     return element
   }
 
   // Children.
+  // 下面是处理子节点的逻辑
+  // 先把标签节点添加到 ancestors，入栈
   ancestors.push(element)
   const mode = context.options.getTextMode(element.tag, element.ns, parent)
+   // 递归解析子节点，传入 ancestors
   const children = parseChildren(context, mode, ancestors)
+  // ancestors 出栈
   ancestors.pop()
-
+  // 添加到 children 属性中
   element.children = children
 
   // End tag.
+   // 结束标签
   if (startsWithEndTagOpen(context.source, element.tag)) {
+    // 解析结束标签，并前进代码到结束标签后
     parseTag(context, TagType.End, parent)
   } else {
     emitError(context, ErrorCodes.X_MISSING_END_TAG, 0, element.loc.start)
@@ -452,7 +482,7 @@ function parseElement(
       }
     }
   }
-
+  // 更新标签节点的代码位置，结束位置到结束标签后
   element.loc = getSelection(context, element.loc.start)
 
   if (isPreBoundary) {
@@ -474,6 +504,8 @@ const isSpecialTemplateDirective = /*#__PURE__*/ makeMap(
 )
 
 /**
+ * @description
+ * 解析开始标签的过程
  * Parse a tag (E.g. `<div id=a>`) with that type (start tag or end tag).
  */
 function parseTag(
@@ -488,48 +520,62 @@ function parseTag(
     )
 
   // Tag open.
+  // 标签打开
   const start = getCursor(context)
+  // 匹配标签文本结束的位置
   const match = /^<\/?([a-z][^\t\r\n\f />]*)/i.exec(context.source)!
   const tag = match[1]
   const ns = context.options.getNamespace(tag, parent)
-
+  // 前进代码到标签文本结束位置
   advanceBy(context, match[0].length)
+  // 前进代码到标签文本后面的空白字符后
   advanceSpaces(context)
 
   // save current state in case we need to re-parse attributes with v-pre
+  // 保存当前状态以防我们需要用 v-pre 重新解析属性
   const cursor = getCursor(context)
   const currentSource = context.source
 
   // Attributes.
+  // 解析标签中的属性，并前进代码到属性后
   let props = parseAttributes(context, type)
 
   // check <pre> tag
+  // 检查是不是一个 pre 标签
   if (context.options.isPreTag(tag)) {
     context.inPre = true
   }
 
   // check v-pre
+  // 检查属性中有没有 v-pre 指令
   if (
     !context.inVPre &&
     props.some(p => p.type === NodeTypes.DIRECTIVE && p.name === 'pre')
   ) {
     context.inVPre = true
     // reset context
+    // 重置 context
     extend(context, cursor)
     context.source = currentSource
     // re-parse attrs and filter out v-pre itself
+    // 重新解析属性，并把 v-pre 过滤了
     props = parseAttributes(context, type).filter(p => p.name !== 'v-pre')
   }
 
   // Tag close.
+  // 标签闭合
   let isSelfClosing = false
+
   if (context.source.length === 0) {
     emitError(context, ErrorCodes.EOF_IN_TAG)
   } else {
+    // 判断是否自闭合标签
     isSelfClosing = startsWith(context.source, '/>')
     if (type === TagType.End && isSelfClosing) {
+      // 结束标签不应该是自闭和标签
       emitError(context, ErrorCodes.END_TAG_WITH_TRAILING_SOLIDUS)
     }
+     // 前进代码到闭合标签后
     advanceBy(context, isSelfClosing ? 2 : 1)
   }
 
@@ -539,9 +585,11 @@ function parseTag(
     const hasVIs = props.some(
       p => p.type === NodeTypes.DIRECTIVE && p.name === 'is'
     )
+    // 接下来判断标签类型，是组件、插槽还是模板
     if (options.isNativeTag && !hasVIs) {
       if (!options.isNativeTag(tag)) tagType = ElementTypes.COMPONENT
     } else if (
+       // 判断是否有 is 属性
       hasVIs ||
       isCoreComponent(tag) ||
       (options.isBuiltInComponent && options.isBuiltInComponent(tag)) ||
