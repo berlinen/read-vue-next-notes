@@ -3,7 +3,17 @@ import { currentRenderingInstance } from './componentRenderUtils'
 import { warn } from './warning'
 
 export interface InjectionKey<T> extends Symbol {}
+/**
+ * @description
+ * 依赖注入api
+ * 在创建组件实例的时候，组件实例的 provides 对象指向父组件实例的 provides 对象
+ *
+  所以在默认情况下，组件实例的 provides 继承它的父组件，但是当组件实例需要提供自己的值的时候，它使用父级提供的对象创建自己的 provides 的对象原型。通过这种方式，在 inject 阶段，我们可以非常容易通过原型链查找来自直接父级提供的数据。
 
+  
+ * @param key
+ * @param value
+ */
 export function provide<T>(key: InjectionKey<T> | string, value: T) {
   if (!currentInstance) {
     if (__DEV__) {
@@ -34,6 +44,12 @@ export function inject(
 ) {
   // fallback to `currentRenderingInstance` so that this can be called in
   // a functional component
+  // const instance = {
+      // 依赖注入相关
+      //provides: parent ? parent.provides : Object.create(appContext.provides),
+      // 其它属性
+      // ...
+  // }
   const instance = currentInstance || currentRenderingInstance
   if (instance) {
     const provides = instance.provides
