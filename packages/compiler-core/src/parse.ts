@@ -41,7 +41,7 @@ const decodeMap: Record<string, string> = {
   apos: "'",
   quot: '"'
 }
-
+// // 创建解析上下文  默认解析配置
 export const defaultParserOptions: MergedParserOptions = {
   delimiters: [`{{`, `}}`],
   getNamespace: () => Namespaces.HTML,
@@ -73,46 +73,71 @@ export interface ParserContext {
   inPre: boolean // HTML <pre> tag, preserve whitespaces
   inVPre: boolean // v-pre, do not process directives and interpolations
 }
-
+/**
+ * @description
+ * 生成 AST虚拟根节点
+ * 1. 创建解析上下文
+ * 2. 解析子节点
+ * 3. 创建AST根节点
+ * @param content
+ * @param options
+ */
 export function baseParse(
   content: string,
   options: ParserOptions = {}
 ): RootNode {
+  // // 创建解析上下文
   const context = createParserContext(content, options)
   const start = getCursor(context)
+  // 解析子节点，并创建 AST
   return createRoot(
     parseChildren(context, TextModes.DATA, []),
     getSelection(context, start)
   )
 }
-
+/**
+ * @description
+ * 创建解析上下文
+ * 解析上下文实际上就是一个 JavaScript 对象，它维护着解析过程中的上下文，其中 options 表示解析相关配置 ，column 表示当前代码的列号，line 表示当前代码的行号，originalSource 表示最初的原始代码，source 表示当前代码，offset 表示当前代码相对于原始代码的偏移量，inPre 表示当前代码是否在 pre 标签内，inVPre 表示当前代码是否在 v-pre 指令的环境下。
+ * @param content
+ * @param options
+ */
 function createParserContext(
   content: string,
   options: ParserOptions
 ): ParserContext {
   return {
+    // 解析相关配置
     options: {
       ...defaultParserOptions,
       ...options
     },
-    column: 1,
-    line: 1,
-    offset: 0,
-    originalSource: content,
-    source: content,
-    inPre: false,
-    inVPre: false
+    column: 1, // 示当前代码的列号
+    line: 1, //  表示当前代码的行号
+    offset: 0, // 表示当前代码相对于原始代码的偏移量
+    originalSource: content, // 表示最初的原始代码
+    source: content, // 表示当前代码，
+    inPre: false, // inPre 表示当前代码是否在 pre 标签内
+    inVPre: false //表示当前代码是否在 v-pre 指令的环境下
   }
 }
-
+/**
+ * @description
+ * 解析子节点
+ * @param context
+ * @param mode
+ * @param ancestors
+ */
 function parseChildren(
   context: ParserContext,
   mode: TextModes,
   ancestors: ElementNode[]
 ): TemplateChildNode[] {
   const parent = last(ancestors)
-  const ns = parent ? parent.ns : Namespaces.HTML
+  const ns = parent ? parent.ns : Namespaces.HTML /* html */
   const nodes: TemplateChildNode[] = []
+
+  // 自顶向下分析代码，生成 nodes
 
   while (!isEnd(context, mode, ancestors)) {
     __TEST__ && assert(context.source.length > 0)
@@ -194,6 +219,7 @@ function parseChildren(
 
   // Whitespace management for more efficient output
   // (same as v2 whitespace: 'condense')
+  // removedWhitespace  // 空白字符管理
   let removedWhitespace = false
   if (mode !== TextModes.RAWTEXT) {
     if (!context.inPre) {

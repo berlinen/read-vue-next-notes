@@ -34,7 +34,12 @@ export const DOMDirectiveTransforms: Record<string, DirectiveTransform> = {
   on: transformOn, // override compiler-core
   show: transformShow
 }
-
+/**
+ * @description
+ * compile 内部通过执行 baseCompile 方法完成编译工作，可以看到 baseCompile 在参数 options 的基础上又扩展了一些配置。
+ * @param template 第一个参数 template 是待编译的模板字符串
+ * @param options 编译的一些配置信息
+ */
 export function compile(
   template: string,
   options: CompilerOptions = {}

@@ -10,7 +10,7 @@ export interface InjectionKey<T> extends Symbol {}
  *
   所以在默认情况下，组件实例的 provides 继承它的父组件，但是当组件实例需要提供自己的值的时候，它使用父级提供的对象创建自己的 provides 的对象原型。通过这种方式，在 inject 阶段，我们可以非常容易通过原型链查找来自直接父级提供的数据。
 
-  
+
  * @param key
  * @param value
  */
@@ -35,7 +35,12 @@ export function provide<T>(key: InjectionKey<T> | string, value: T) {
     provides[key as string] = value
   }
 }
-
+/**
+ * @desc
+ * inject 支持两个参数，第一个参数是 key，我们可以访问组件实例中的 provides 对象对应的 key，层层查找父级提供的数据。第二个参数是默认值，如果查找不到数据，则直接返回默认值。
+ * 
+ * @param key
+ */
 export function inject<T>(key: InjectionKey<T> | string): T | undefined
 export function inject<T>(key: InjectionKey<T> | string, defaultValue: T): T
 export function inject(

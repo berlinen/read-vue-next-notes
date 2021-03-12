@@ -35,7 +35,12 @@ let accessedAttrs: boolean = false
 export function markAttrsAccessed() {
   accessedAttrs = true
 }
-
+/**
+ * @description
+ * 会通过 renderComponentRoot 方法渲染子树 vnode
+ * renderComponentRoot 内部主要通过执行组件实例的 render 函数，创建生成子树 vnode。
+ * @param instance ，
+ */
 export function renderComponentRoot(
   instance: ComponentInternalInstance
 ): VNode {
