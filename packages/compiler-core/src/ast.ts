@@ -521,7 +521,20 @@ export function createRoot(
     loc
   }
 }
-
+/**
+ * @description
+ * createVNodeCall 的实现很简单，它最后返回了一个对象，包含了传入的参数数据。这里要注意 context.helper 函数的调用，它会把一些 Symbol 对象添加到 context.helpers 数组中，目的是为了后续代码生成阶段，生成一些辅助代码。
+ * @param context
+ * @param tag
+ * @param props
+ * @param children
+ * @param patchFlag
+ * @param dynamicProps
+ * @param directives
+ * @param isBlock
+ * @param isForBlock
+ * @param loc
+ */
 export function createVNodeCall(
   context: TransformContext | null,
   tag: VNodeCall['tag'],
@@ -536,6 +549,7 @@ export function createVNodeCall(
 ): VNodeCall {
   if (context) {
     if (isBlock) {
+      // 它会把一些 Symbol 对象添加到 context.helpers 数组中，目的是为了后续代码生成阶段，生成一些辅助代码。
       context.helper(OPEN_BLOCK)
       context.helper(CREATE_BLOCK)
     } else {

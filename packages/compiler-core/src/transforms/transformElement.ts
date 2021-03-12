@@ -53,6 +53,45 @@ import { isStaticNode } from './hoistStatic'
 const directiveImportMap = new WeakMap<DirectiveNode, symbol>()
 
 // generate a JavaScript AST for this element's codegen
+/**
+ * @description
+ * Element 节点转换函数
+ *
+ * 可以看到，只有当 AST 节点是组件或者普通元素节点时，才会返回一个退出函数，而且它会在该节点的子节点逻辑处理完毕后执行。
+ *
+ * 节点函数的转换目标，即创建一个实现 VNodeCall 接口的代码生成节点，也就是说，生成这个代码生成节点后，后续的代码生成阶段可以根据这个节点对象生成目标代码。
+ *
+ * 1 判断这个节点是不是一个 Block 节点。
+ *
+ * 为了运行时的更新优化，Vue.js 3.0 设计了一个 Block tree 的概念
+ *
+ * Block tree 是一个将模版 基于 动态节点指令 切割的嵌套区块，每个区块只需要以一个 Array 来追踪自身包含的动态节点
+ *
+ * 借助 Block tree，Vue.js 将 vnode 更新性能由与模版整体大小相关提升为与动态内容的数量相关，极大优化了 diff 的效率，模板的动静比越大，这个优化就会越明显。
+ *
+ * 因此在编译阶段，我们需要找出哪些节点可以构成一个 Block，其中动态组件、svg、foreignObject 标签以及动态绑定的 prop 的节点都被视作一个 Block。
+ *
+ * 2 处理节点的 props。
+ *
+ *   AST 节点的 props 对象中进一步解析出指令 vnodeDirectives、动态属性 dynamicPropNames，以及更新标识 patchFlag。patchFlag 主要用于标识节点更新的类型，在组件更新的优化中会用到，
+ *
+ * 3. 处理节点的 children
+ *
+ * 如果它有子节点，则说明是组件的插槽，另外还会有对一些内置组件比如 KeepAlive、Teleport 的处理逻辑。
+ *
+ * 我们通常直接拿节点的 children 属性给 vnodeChildren 即可，但有一种特殊情况，如果节点只有一个子节点，并且是一个普通文本节点、插值或者表达式，那么直接把节点赋值给 vnodeChildren。
+ *
+ * 4. 会对前面解析 props 求得的 patchFlag 和 dynamicPropNames 做进一步处理
+ *
+ * 我们会根据 patchFlag 的值从 PatchFlagNames 中获取 flag 对应的名字，从而生成注释，因为 patchFlag 本身就是一个个数字，通过名字注释的方式，我们就可以一眼从最终生成的代码中了解到 patchFlag 代表的含义。
+ *
+ * 我们还会把数组 dynamicPropNames 转化生成 vnodeDynamicProps 字符串，
+ *
+ * 5. 通过createVNodeCall 创建了实现 VNodeCall 接口的代码生成节点，
+ *
+ * @param node
+ * @param context
+ */
 export const transformElement: NodeTransform = (node, context) => {
   if (
     !(
@@ -65,7 +104,9 @@ export const transformElement: NodeTransform = (node, context) => {
   }
   // perform the work on exit, after all child expressions have been
   // processed and merged.
+  // 返回退出函数，在所有子表达式处理并合并后执行
   return function postTransformElement() {
+    // 转换的目标是创建一个实现 VNodeCall 接口的代码生成节点
     const { tag, props } = node
     const isComponent = node.tagType === ElementTypes.COMPONENT
 
@@ -76,15 +117,18 @@ export const transformElement: NodeTransform = (node, context) => {
       : `"${tag}"`
     const isDynamicComponent =
       isObject(vnodeTag) && vnodeTag.callee === RESOLVE_DYNAMIC_COMPONENT
-
+    // 属性
     let vnodeProps: VNodeCall['props']
+    // 子节点
     let vnodeChildren: VNodeCall['children']
+    // 标记更新的类型标识，用于运行时优化
     let vnodePatchFlag: VNodeCall['patchFlag']
     let patchFlag: number = 0
+    // 动态绑定的属性
     let vnodeDynamicProps: VNodeCall['dynamicProps']
     let dynamicPropNames: string[] | undefined
     let vnodeDirectives: VNodeCall['directives']
-
+    // 动态组件、svg、foreignObject 标签以及动态绑定 key prop 的节点都被视作一个 Block
     let shouldUseBlock =
       // dynamic component may resolve to plain elements
       isDynamicComponent ||

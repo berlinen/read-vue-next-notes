@@ -106,7 +106,14 @@ export interface TransformContext extends Required<TransformOptions> {
   hoist(exp: JSChildNode): SimpleExpressionNode
   cache<T extends JSChildNode>(exp: T, isVNode?: boolean): CacheExpression | T
 }
-
+/**
+ * @description
+ * 创建tranform上下文
+ *
+ * 这个上下文对象 context 维护了 transform 过程的一些配置，比如前面提到的节点和指令的转换函数等；还维护了 transform 过程的一些状态数据，比如当前处理的 AST 节点，当前 AST 节点在子节点中的索引，以及当前 AST 节点的父节点等。此外，context 还包含了在转换过程中可能会调用的一些辅助函数，和一些修改 context 对象的方法。
+ * @param root
+ * @param param1
+ */
 export function createTransformContext(
   root: RootNode,
   {
@@ -256,9 +263,21 @@ export function createTransformContext(
 
   return context
 }
-
+/**
+ * @description
+ * 1 创建 transform 上下文、
+ *
+ * 2 遍历 AST 节点、
+ *
+ * 3 静态提升
+ * 4 创建根代码生成节点
+ * @param root
+ * @param options
+ */
 export function transform(root: RootNode, options: TransformOptions) {
+  //  创建 transform 上下文、
   const context = createTransformContext(root, options)
+  // 遍历 AST 节点、
   traverseNode(root, context)
   if (options.hoistStatic) {
     hoistStatic(root, context)
@@ -334,13 +353,21 @@ export function traverseChildren(
     traverseNode(child, context)
   }
 }
-
+/**
+ * 遍历ASt节点
+ * traverseNode 函数的基本思路就是递归遍历 AST 节点，针对每个节点执行一系列的转换函数，有些转换函数还会设计一个退出函数，当你执行转换函数后，它会返回一个新函数，然后在你处理完子节点后再执行这些退出函数，这是因为有些逻辑的处理需要依赖子节点的处理结果才能继续执行。‘
+ *
+ * Vue.js 内部大概内置了八种转换函数，分别处理指令、表达式、元素节点、文本节点等不同的特性。
+ * @param node
+ * @param context
+ */
 export function traverseNode(
   node: RootNode | TemplateChildNode,
   context: TransformContext
 ) {
   context.currentNode = node
   // apply transform plugins
+  // 节点转换函数
   const { nodeTransforms } = context
   const exitFns = []
   for (let i = 0; i < nodeTransforms.length; i++) {
@@ -354,9 +381,11 @@ export function traverseNode(
     }
     if (!context.currentNode) {
       // node was removed
+      // 节点被移除
       return
     } else {
       // node may have been replaced
+      // 因为在转换的过程中节点可能被替换，恢复到之前的节点
       node = context.currentNode
     }
   }
@@ -366,11 +395,13 @@ export function traverseNode(
       if (!context.ssr) {
         // inject import for the Comment symbol, which is needed for creating
         // comment nodes with `createVNode`
+         // 需要导入 createComment 辅助函数
         context.helper(CREATE_COMMENT)
       }
       break
     case NodeTypes.INTERPOLATION:
       // no need to traverse, but we need to inject toString helper
+      // 需要导入 toString 辅助函数
       if (!context.ssr) {
         context.helper(TO_DISPLAY_STRING)
       }
@@ -378,6 +409,7 @@ export function traverseNode(
 
     // for container types, further traverse downwards
     case NodeTypes.IF:
+      // 递归遍历每个分支节点
       for (let i = 0; i < node.branches.length; i++) {
         traverseNode(node.branches[i], context)
       }
@@ -386,11 +418,13 @@ export function traverseNode(
     case NodeTypes.FOR:
     case NodeTypes.ELEMENT:
     case NodeTypes.ROOT:
+      // 遍历子节点
       traverseChildren(node, context)
       break
   }
 
   // exit transforms
+  // 执行转换函数返回的退出函数
   let i = exitFns.length
   while (i--) {
     exitFns[i]()

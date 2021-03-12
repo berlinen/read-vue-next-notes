@@ -179,7 +179,7 @@ export function ssrProcessComponent(
 }
 
 export const rawOptionsMap = new WeakMap<RootNode, CompilerOptions>()
-
+//// 获取节点和指令转换的方法
 const [baseNodeTransforms, baseDirectiveTransforms] = getBaseTransformPreset(
   true
 )

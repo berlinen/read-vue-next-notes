@@ -21,7 +21,12 @@ export type TransformPreset = [
   NodeTransform[],
   Record<string, DirectiveTransform>
 ]
-
+/**
+ * @description
+ * 获取节点和指令转换的方法
+ * 然后调用 transform 方法做 AST 转换，并且把这些节点和指令的转换方法作为配置的属性参数传入。
+ * @param prefixIdentifiers
+ */
 export function getBaseTransformPreset(
   prefixIdentifiers?: boolean
 ): TransformPreset {

@@ -27,23 +27,73 @@ import { createCompilerError, ErrorCodes } from '../errors'
 import { Node, Function, Identifier, ObjectProperty } from '@babel/types'
 
 const isLiteralWhitelisted = /*#__PURE__*/ makeMap('true,false,null,this')
+/***
+ * @description
+ * 表达式节点转换函数
+ * 需要注意的是，只有在 Node.js 环境下的编译或者是 Web 端的非生产环境下才会执行 transformExpression，
+ *
+ * transformExpression 主要做的事情就是 转换插值 和 元素指令中的动态表达式，把简单的表达式对象转换成复合表达式对象，内部主要是通过 processExpression 函数完成。举个例子，比如这个模板：{{ msg + test }}，它执行 parse 后生成的表达式节点 node.content 值为一个简单的表达式对象：
+ * @example
+ * {
+ *   "type": 4,
+ *    "isStatic": false,
+     "isConstant": false,
+     "content": "msg + test"
+ * }
+  经过 processExpression 处理后，node.content 的值变成了一个复合表达式对象：
+  {
+    "type": 8,
+    "children": [
+      {
+        "type": 4,
+        "isConstant": false,
+        "content": "_ctx.msg",
+        "isStatic": false
+      },
+      " + ",
+      {
+        "type": 4,
+        "isConstant": false,
+        "content": "_ctx.test",
+        "isStatic": false
+      }
+    ],
+    "identifiers": []
+  }
+  这里，我们重点关注对象中的 children 属性，它是一个长度为 3 的数组，其实就是把表达式msg + test拆成了三部分，其中变量 msg 和 test 对应都加上了前缀 _ctx。
 
+  我们就要想到模板中引用的的 msg 和 test 对象最终都是在组件实例中访问的，但为了书写模板方便，Vue.js 并没有让我们在模板中手动加组件实例的前缀，例如：{{ this.msg + this.test }}，这样写起来就会不够方便，但如果用 JSX 写的话，通常要手动写 this。
+
+  你可能会有疑问，为什么 Vue.js 2.x 编译的结果没有 _ctx 前缀呢？这是因为 Vue.js 2.x 的编译结果使用了”黑魔法“ with，比如上述模板，在 Vue.js 2.x 最终编译的结果：with(this){return _s(msg + test)}。
+
+  它利用 with 的特性动态去 this 中查找 msg 和 test 属性，所以不需要手动加前缀。
+
+  但是，Vue.js 3.0 在 Node.js 端的编译结果舍弃了 with，它会在 processExpression 过程中对表达式动态分析，给该加前缀的地方加上前缀。
+
+
+
+
+ */
 export const transformExpression: NodeTransform = (node, context) => {
   if (node.type === NodeTypes.INTERPOLATION) {
+    // 处理插值中的动态表达式
     node.content = processExpression(
       node.content as SimpleExpressionNode,
       context
     )
   } else if (node.type === NodeTypes.ELEMENT) {
     // handle directives on element
+    // 处理元素指令中的动态表达式
     for (let i = 0; i < node.props.length; i++) {
       const dir = node.props[i]
       // do not process for v-on & v-for since they are special handled
+      // v-on 和 v-for 不处理，因为它们都有各自的处理逻辑
       if (dir.type === NodeTypes.DIRECTIVE && dir.name !== 'for') {
         const exp = dir.exp
         const arg = dir.arg
         // do not process exp if this is v-on:arg - we need special handling
         // for wrapping inline statements.
+        // v-on 和 v-for 不处理，因为它们都有各自的处理逻辑
         if (
           exp &&
           exp.type === NodeTypes.SIMPLE_EXPRESSION &&
@@ -75,6 +125,19 @@ interface PrefixMeta {
 // Important: since this function uses Node.js only dependencies, it should
 // always be used with a leading !__BROWSER__ check so that it can be
 // tree-shaken from the browser build.
+/**
+ * processExpression
+ * 这个过程肯定有一定的成本，因为它内部依赖了 @babel/parser 库去解析表达式生成 AST 节点，并依赖了 estree-walker 库去遍历这个 AST 节点，然后对节点分析去判断是否需要加前缀，接着对 AST 节点修改，最终转换生成新的表达式对象。
+ *
+ *  @babel/parser 这个库通常是在 Node.js 端用的，而且这库本身体积非常大，如果打包进 Vue.js 的话会让包体积膨胀 4 倍，所以我们并不会在生产环境的 Web 端引入这个库，Web 端生产环境下的运行时编译最终仍然会用 with 的方式。
+ *
+ * 所以
+ * 只有在 Node.js 环境下的编译或者是 Web 端的非生产环境下才会执行 transformExpression。
+ * @param node
+ * @param context
+ * @param asParams
+ * @param asRawStatements
+ */
 export function processExpression(
   node: SimpleExpressionNode,
   context: TransformContext,

@@ -12,6 +12,12 @@ import { PatchFlags, PatchFlagNames } from '@vue/shared'
 
 // Merge adjacent text nodes and expressions into a single expression
 // e.g. <div>abc {{ d }} {{ e }}</div> should have a single expression node as child.
+/**
+ * @description
+ * text节点转换函数
+ * @param node
+ * @param context
+ */
 export const transformText: NodeTransform = (node, context) => {
   if (
     node.type === NodeTypes.ROOT ||
@@ -21,6 +27,7 @@ export const transformText: NodeTransform = (node, context) => {
   ) {
     // perform the transform on node exit so that all expressions have already
     // been processed.
+    // 在节点退出时执行转换，保证所有表达式都已经被处理
     return () => {
       const children = node.children
       let currentContainer: CompoundExpressionNode | undefined = undefined
