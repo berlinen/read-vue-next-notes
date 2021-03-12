@@ -124,6 +124,9 @@ function createParserContext(
 /**
  * @description
  * 解析子节点
+ * parseChildren 的目的就是解析并创建 AST 节点数组。它有两个主要流程，
+ * 1. 自顶向下分析代码，生成 AST 节点数组 nodes；
+ * 2. 空白字符管理，用于提高编译的效率
  * @param context
  * @param mode
  * @param ancestors
@@ -133,12 +136,13 @@ function parseChildren(
   mode: TextModes,
   ancestors: ElementNode[]
 ): TemplateChildNode[] {
+  // 父节点
   const parent = last(ancestors)
   const ns = parent ? parent.ns : Namespaces.HTML /* html */
   const nodes: TemplateChildNode[] = []
 
-  // 自顶向下分析代码，生成 nodes
-
+   // 自顶向下分析代码，生成 nodes
+  // 判断是否遍历结束
   while (!isEnd(context, mode, ancestors)) {
     __TEST__ && assert(context.source.length > 0)
     const s = context.source
@@ -147,19 +151,26 @@ function parseChildren(
     if (mode === TextModes.DATA || mode === TextModes.RCDATA) {
       if (!context.inVPre && startsWith(s, context.options.delimiters[0])) {
         // '{{'
+        // 处理 {{ 插值代码
         node = parseInterpolation(context, mode)
+         // 处理 < 开头的代码
       } else if (mode === TextModes.DATA && s[0] === '<') {
         // https://html.spec.whatwg.org/multipage/parsing.html#tag-open-state
+         // s 长度为 1，说明代码结尾是 <，报错
         if (s.length === 1) {
           emitError(context, ErrorCodes.EOF_BEFORE_TAG_NAME, 1)
         } else if (s[1] === '!') {
           // https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state
+          // 处理 <! 开头的代码
           if (startsWith(s, '<!--')) {
+            // 处理注释节点
             node = parseComment(context)
           } else if (startsWith(s, '<!DOCTYPE')) {
             // Ignore DOCTYPE by a limitation.
+            // 处理 <!DOCTYPE 节点
             node = parseBogusComment(context)
           } else if (startsWith(s, '<![CDATA[')) {
+            // 处理 <![CDATA[ 节点
             if (ns !== Namespaces.HTML) {
               node = parseCDATA(context, ancestors)
             } else {
@@ -170,14 +181,18 @@ function parseChildren(
             emitError(context, ErrorCodes.INCORRECTLY_OPENED_COMMENT)
             node = parseBogusComment(context)
           }
+           // 处理 </ 结束标签
         } else if (s[1] === '/') {
           // https://html.spec.whatwg.org/multipage/parsing.html#end-tag-open-state
+          // s 长度为 2，说明代码结尾是 </，报错
           if (s.length === 2) {
             emitError(context, ErrorCodes.EOF_BEFORE_TAG_NAME, 2)
+             // </> 缺少结束标签，报错
           } else if (s[2] === '>') {
             emitError(context, ErrorCodes.MISSING_END_TAG_NAME, 2)
             advanceBy(context, 3)
             continue
+            // 多余的结束标签
           } else if (/[a-z]/i.test(s[2])) {
             emitError(context, ErrorCodes.X_INVALID_END_TAG)
             parseTag(context, TagType.End, parent)
@@ -191,6 +206,7 @@ function parseChildren(
             node = parseBogusComment(context)
           }
         } else if (/[a-z]/i.test(s[1])) {
+          // 解析标签元素节点
           node = parseElement(context, ancestors)
         } else if (s[1] === '?') {
           emitError(
@@ -205,14 +221,17 @@ function parseChildren(
       }
     }
     if (!node) {
+      // 解析普通文本节点
       node = parseText(context, mode)
     }
 
     if (isArray(node)) {
+      // 如果 node 是数组，则遍历添加
       for (let i = 0; i < node.length; i++) {
         pushNode(nodes, node[i])
       }
     } else {
+       // 添加单个 node
       pushNode(nodes, node)
     }
   }
@@ -313,7 +332,15 @@ function parseCDATA(
 
   return nodes
 }
-
+/**
+ * @description
+ * 注释节点的解析
+ * 即当前代码 s 是以 <!-- 开头的字符串，则走到注释节点的解析处理逻辑。
+ * parseComment 的实现很简单，首先它会利用注释结束符的正则表达式去匹配代码，找出注释结束符。如果没有匹配到或者注释结束符不合法，都会报错。
+ * 如果找到合法的注释结束符，则获取它中间的注释内容 content，然后截取注释开头到结尾之间的代码，并判断是否有嵌套注释，如果有嵌套注释也会报错。
+ * 接着就是通过调用 advanceBy 前进代码到注释结束符后，这个函数在整个模板解析过程中经常被调用，它的目的是用来前进代码，更新 context 解析上下文，
+ * @param context
+ */
 function parseComment(context: ParserContext): CommentNode {
   __TEST__ && assert(startsWith(context.source, '<!--'))
 
@@ -321,24 +348,31 @@ function parseComment(context: ParserContext): CommentNode {
   let content: string
 
   // Regular comment.
-  const match = /--(\!)?>/.exec(context.source)
+  //  // 常规注释的结束符
+  const match = /--(\!)?>/.exec(context.source) /** /--(\!)?/.exec(content.source) */
+  //// 没有匹配的注释结束符
   if (!match) {
     content = context.source.slice(4)
     advanceBy(context, context.source.length)
     emitError(context, ErrorCodes.EOF_IN_COMMENT)
   } else {
+    // 非法的注释符号
     if (match.index <= 3) {
       emitError(context, ErrorCodes.ABRUPT_CLOSING_OF_EMPTY_COMMENT)
     }
+   // 注释结束符不正确
     if (match[1]) {
       emitError(context, ErrorCodes.INCORRECTLY_CLOSED_COMMENT)
     }
+    // 获取注释的内容
     content = context.source.slice(4, match.index)
 
     // Advancing with reporting nested comments.
+    // 截取到注释结尾之间的代码，用于后续判断嵌套注释
     const s = context.source.slice(0, match.index)
     let prevIndex = 1,
       nestedIndex = 0
+    // 判断嵌套注释符的情况，存在即报错
     while ((nestedIndex = s.indexOf('<!--', prevIndex)) !== -1) {
       advanceBy(context, nestedIndex - prevIndex + 1)
       if (nestedIndex + 4 < s.length) {
@@ -346,13 +380,14 @@ function parseComment(context: ParserContext): CommentNode {
       }
       prevIndex = nestedIndex + 1
     }
+    // 前进代码到注释结束符后
     advanceBy(context, match.index + match[0].length - prevIndex + 1)
   }
 
   return {
-    type: NodeTypes.COMMENT,
-    content,
-    loc: getSelection(context, start)
+    type: NodeTypes.COMMENT, // 3 一个注释节点
+    content, // 表示注释的内容
+    loc: getSelection(context, start) // loc 表示注释的代码开头和结束的位置信息
   }
 }
 
@@ -762,11 +797,19 @@ function parseAttributeValue(
 
   return { content, isQuoted, loc: getSelection(context, start) }
 }
-
+/**
+ * @desc
+ * 插值的解析
+ * 首先它会尝试找插值的结束分隔符，如果找不到则报错
+ *
+ * @param context
+ * @param mode
+ */
 function parseInterpolation(
   context: ParserContext,
   mode: TextModes
 ): InterpolationNode | undefined {
+  // 从配置中获取插值开始和结束分隔符，默认是 {{ 和 }}
   const [open, close] = context.options.delimiters
   __TEST__ && assert(startsWith(context.source, open))
 
@@ -777,45 +820,64 @@ function parseInterpolation(
   }
 
   const start = getCursor(context)
+  // 代码前进到插值开始分隔符后
   advanceBy(context, open.length)
+  // 内部插值开始位置
   const innerStart = getCursor(context)
+  // 内部插值结束位置
   const innerEnd = getCursor(context)
+  // 插值原始内容的长度
   const rawContentLength = closeIndex - open.length
+  // 插值原始内容
   const rawContent = context.source.slice(0, rawContentLength)
+  // 获取插值的内容，并前进代码到插值的内容后
   const preTrimContent = parseTextData(context, rawContentLength, mode)
   const content = preTrimContent.trim()
+  // 内容相对于插值开始分隔符的头偏移
   const startOffset = preTrimContent.indexOf(content)
   if (startOffset > 0) {
+    // 更新内部插值开始位置
     advancePositionWithMutation(innerStart, rawContent, startOffset)
   }
+  // 内容相对于插值结束分隔符的尾偏移
   const endOffset =
     rawContentLength - (preTrimContent.length - content.length - startOffset)
+  // 更新内部插值结束位置
   advancePositionWithMutation(innerEnd, rawContent, endOffset)
+  // 前进代码到插值结束分隔符后
   advanceBy(context, close.length)
 
   return {
-    type: NodeTypes.INTERPOLATION,
+    type: NodeTypes.INTERPOLATION, // 一个插值节点
+    // 描述表达式节点的对象
     content: {
-      type: NodeTypes.SIMPLE_EXPRESSION,
+      type: NodeTypes.SIMPLE_EXPRESSION, // 示它是一个表达式节点
       isStatic: false,
       // Set `isConstant` to false by default and will decide in transformExpression
       isConstant: false,
-      content,
-      loc: getSelection(context, innerStart, innerEnd)
+      content, // content 表示插值的内容。
+      loc: getSelection(context, innerStart, innerEnd) // loc 表示内容的代码开头和结束的位置信息
     },
-    loc: getSelection(context, start)
+    loc: getSelection(context, start) // 表示插值的代码开头和结束的位置信息
   }
 }
-
+/**
+ * @description
+ * 普通文本的解析
+ *
+ * @param context
+ * @param mode
+ */
 function parseText(context: ParserContext, mode: TextModes): TextNode {
   __TEST__ && assert(context.source.length > 0)
-
+ // 文本结束符
   const endTokens = ['<', context.options.delimiters[0]]
   if (mode === TextModes.CDATA) {
     endTokens.push(']]>')
   }
 
   let endIndex = context.source.length
+  // 遍历文本结束符，匹配找到结束的位置
   for (let i = 0; i < endTokens.length; i++) {
     const index = context.source.indexOf(endTokens[i], 1)
     if (index !== -1 && endIndex > index) {
@@ -826,12 +888,13 @@ function parseText(context: ParserContext, mode: TextModes): TextNode {
   __TEST__ && assert(endIndex > 0)
 
   const start = getCursor(context)
+  // 获取文本的内容，并前进代码到文本的内容后
   const content = parseTextData(context, endIndex, mode)
 
   return {
-    type: NodeTypes.TEXT,
-    content,
-    loc: getSelection(context, start)
+    type: NodeTypes.TEXT, //type 表示它是一个文本节点
+    content, //表示文本的内容，
+    loc: getSelection(context, start) // 表示文本的代码开头和结束的位置信息。
   }
 }
 
@@ -886,11 +949,19 @@ function last<T>(xs: T[]): T | undefined {
 function startsWith(source: string, searchString: string): boolean {
   return source.startsWith(searchString)
 }
-
+/**
+ * @description
+ *  advanceBy 这个函数在整个模板解析过程中经常被调用，它的目的是用来前进代码，更新 context 解析上下文，
+ *  主要就是更新解析上下文 context 中的 source 来前进代码，同时更新 offset、line、column 等和代码位置相关的属性。
+ * @param context
+ * @param numberOfCharacters
+ */
 function advanceBy(context: ParserContext, numberOfCharacters: number): void {
   const { source } = context
   __TEST__ && assert(numberOfCharacters <= source.length)
+  // 更新 context 的 offset、line、column
   advancePositionWithMutation(context, source, numberOfCharacters)
+  // 更新 context 的 source
   context.source = source.slice(numberOfCharacters)
 }
 

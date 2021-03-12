@@ -133,6 +133,13 @@ export function advancePositionWithClone(
 
 // advance by mutation without cloning (for performance reasons), since this
 // gets called a lot in the parser
+/**
+ * @description
+ * 更新 context 的 offset、line、column
+ * @param pos
+ * @param source
+ * @param numberOfCharacters
+ */
 export function advancePositionWithMutation(
   pos: Position,
   source: string,
