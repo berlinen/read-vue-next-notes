@@ -258,6 +258,7 @@ const prodEffectOptions = {
 function createDevEffectOptions(
   instance: ComponentInternalInstance
 ): ReactiveEffectOptions {
+  // onRenderTracked 和 onRenderTriggered 注册的钩子函数，原来是在副作用渲染函数的 onTrack 和 onTrigger 对应的函数中执行的。
   return {
     scheduler: queueJob,
     onTrack: instance.rtc ? e => invokeArrayFns(instance.rtc!, e) : void 0,

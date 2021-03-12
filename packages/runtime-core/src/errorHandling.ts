@@ -102,7 +102,17 @@ export function callWithAsyncErrorHandling(
   }
   return values
 }
-
+/**
+ * @description
+ * handleError 的实现其实很简单，它会从当前报错的组件的父组件实例开始，尝试去查找注册的 errorCaptured 钩子函数，如果有则遍历执行并且判断 errorCaptured 钩子函数的返回值是否为 true，如果是则说明这个错误已经得到了正确的处理，就会直接结束。
+ *
+ * 否则会继续遍历，遍历完当前组件实例的 errorCaptured 钩子函数后，如果这个错误还没得到正确处理，则向上查找它的父组件实例，以同样的逻辑去查找是否有正确处理该错误的 errorCaptured 钩子函数，直到查找完毕。
+ *
+ * 如果整个链路上都没有正确处理错误的 errorCaptured 钩子函数，则通过 logError 往控制台输出未处理的错误。所以 errorCaptured 本质上是捕获一个来自子孙组件的错误，它返回 true 就可以阻止错误继续向上传播。
+ * @param err
+ * @param instance
+ * @param type
+ */
 export function handleError(
   err: unknown,
   instance: ComponentInternalInstance | null,
@@ -112,13 +122,17 @@ export function handleError(
   if (instance) {
     let cur = instance.parent
     // the exposed instance is the render proxy to keep it consistent with 2.x
+     // 为了兼容 2.x 版本，暴露组件实例给钩子函数
     const exposedInstance = instance.proxy
     // in production the hook receives only the error code
+    // 获取错误信息
     const errorInfo = __DEV__ ? ErrorTypeStrings[type] : type
+    // 尝试向上查找所有父组件，执行 errorCaptured 钩子函数
     while (cur) {
       const errorCapturedHooks = cur.ec
       if (errorCapturedHooks) {
         for (let i = 0; i < errorCapturedHooks.length; i++) {
+           // 如果执行的 errorCaptured 钩子函数并返回 true，则停止向上查找。、
           if (errorCapturedHooks[i](err, exposedInstance, errorInfo)) {
             return
           }
@@ -138,6 +152,7 @@ export function handleError(
       return
     }
   }
+  // 往控制台输出未处理的错误
   logError(err, type, contextVNode)
 }
 
