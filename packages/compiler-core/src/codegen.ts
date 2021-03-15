@@ -173,11 +173,32 @@ function createCodegenContext(
 
   return context
 }
-
+/**
+ * @description
+ * AST 转换后，会执行 generate 函数生成代码：
+ * generate 函数的输入就是转换后的 AST 根节点，
+ * 1. 创建代码生成上下文
+ *      是通过执行 createCodegenContext 创建代码生成上下文
+ *      这个上下文对象 context 维护了 generate 过程的一些配置，比如 mode、prefixIdentifiers；也维护了 generate 过程的一些状态数据，比如当前生成的代码 code，当前生成代码的缩进 indentLevel 等。
+ *      context 还包含了在 generate 过程中可能会调用的一些辅助函数，它们会在整个代码生成节点过程中经常被用到
+ *      push(code)，就是在当前的代码 context.code 后追加 code 来更新它的值
+ *      indent()，它的作用就是增加代码的缩进，它会让上下文维护的代码缩进 context.indentLevel 加 1，内部会执行 newline 方法，添加一个换行符，以及两倍indentLevel 对应的空格来表示缩进的长度
+ *      deindent()，和 indent 相反，它会减少代码的缩进，让上下文维护的代码缩进 context.indentLevel 减 1，在内部会执行 newline 方法去添加一个换行符，并减少两倍indentLevel 对应的空格的缩进长度。
+ * 2. 生成预设代码
+ *
+ *     因为 mode 是 module，所以会执行 genModulePreamble 生成预设代码，
+ *     ast.helpers 是在 transform 阶段通过 context.helper 方法添加的
+ * 3. 生成渲染函数
+ * 4. 生成资源声明代码
+ * 5. 生成创建 VNode 树的表达式
+ * @param ast generate 函数的输入就是转换后的 AST 根节点，
+ * @param options
+ */
 export function generate(
   ast: RootNode,
   options: CodegenOptions = {}
 ): CodegenResult {
+  // 创建代码生成上下文
   const context = createCodegenContext(ast, options)
   const {
     mode,
@@ -194,6 +215,7 @@ export function generate(
   const genScopeId = !__BROWSER__ && scopeId != null && mode === 'module'
 
   // preambles
+  // 生成预设代码
   if (!__BROWSER__ && mode === 'module') {
     genModulePreamble(ast, context, genScopeId)
   } else {
@@ -210,7 +232,7 @@ export function generate(
     push(`function ssrRender(_ctx, _push, _parent) {`)
   }
   indent()
-
+  // 处理带 with 的情况，Web 端运行时编译
   if (useWithBlock) {
     push(`with (_ctx) {`)
     indent()
@@ -228,18 +250,21 @@ export function generate(
   }
 
   // generate asset resolution statements
+  // 生成自定义组件声明代码
   if (ast.components.length) {
     genAssets(ast.components, 'component', context)
     if (ast.directives.length || ast.temps > 0) {
       newline()
     }
   }
+  // 生成自定义指令声明代码
   if (ast.directives.length) {
     genAssets(ast.directives, 'directive', context)
     if (ast.temps > 0) {
       newline()
     }
   }
+  // 生成临时变量代码
   if (ast.temps > 0) {
     push(`let `)
     for (let i = 0; i < ast.temps; i++) {
@@ -255,6 +280,7 @@ export function generate(
   if (!ssr) {
     push(`return `)
   }
+  // 生成创建 VNode 树的表达式
   if (ast.codegenNode) {
     genNode(ast.codegenNode, context)
   } else {
