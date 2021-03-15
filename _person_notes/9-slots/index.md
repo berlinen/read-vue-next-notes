@@ -447,3 +447,81 @@ _createVNode("p", null, _toDisplayString(_ctx.footer), 1 /* TEXT */)
 _: 1
 }
 ```
+
+那么对于 name 为 header，它的值就是：
+
+```js
+_withCtx(() => [
+  _createVNode("h1", null, _toDisplayString(_ctx.header), 1 /* TEXT */)
+])
+```
+
+它是执行 _withCtx 函数后的返回值，我们接着看 withCtx 函数的实现：
+
+```js
+function withCtx(fn, ctx = currentRenderingInstance) {
+  if (!ctx)
+    return fn
+  return function renderFnWithContext() {
+    const owner = currentRenderingInstance
+    setCurrentRenderingInstance(ctx)
+    // 父组件定义的插槽最终还是要在子组件中渲染，延迟渲染。虽然作用域是父组件，但是内部通过apply传递了子组件的数据。
+    const res = fn.apply(null, arguments)
+    setCurrentRenderingInstance(owner)
+    return res
+  }
+}
+```
+
+withCtx 的实现很简单，它支持传入一个函数 fn 和执行的上下文变量 ctx，它的默认值是 currentRenderingInstance，也就是执行 render 函数时的当前组件实例。
+
+withCtx 会返回一个新的函数，这个函数执行的时候，会先保存当前渲染的组件实例 owner，然后把 ctx 设置为当前渲染的组件实例，接着执行 fn，执行完毕后，再把之前的 owner 设置为当前组件实例。
+
+这么做就是为了保证在子组件中渲染具体插槽内容时，它的渲染组件实例是父组件实例，这样也就保证它的数据作用域也是父组件的了。
+
+
+所以对于 header 这个 slot，它的 slot 函数的返回值是一个数组，如下：
+
+```js
+[
+  _createVNode("h1", null, _toDisplayString(_ctx.header), 1 /* TEXT */)
+]
+```
+
+我们回到 renderSlot 函数，最终插槽对应的 vnode 渲染就变成了如下函数：
+
+```js
+createBlock(Fragment, { key: props.key }, [_createVNode("h1", null, _toDisplayString(_ctx.header), 1 /* TEXT */)], 64 /* STABLE_FRAGMENT */)
+```
+
+我们知道，createBlock 内部是会执行 createVNode 创建 vnode，vnode 创建完后，仍然会通过 patch 把 vnode 挂载到页面上，那么对于插槽的渲染，patch 过程又有什么不同呢？
+
+注意这里我们的 vnode 的 type 是 Fragement，所以在执行 patch 的时候，会执行 processFragment 逻辑，我们来看它的实现：
+
+```js
+const processFragment = (n1, n2, container, anchor, parentComponent, parentSuspense, isSVG, optimized) => {
+  const fragmentStartAnchor = (n2.el = n1 ? n1.el : hostCreateText(''))
+  const fragmentEndAnchor = (n2.anchor = n1 ? n1.anchor : hostCreateText(''))
+  let { patchFlag } = n2
+  if (patchFlag > 0) {
+    optimized = true
+  }
+  if (n1 == null) {
+   //插入节点
+// 先在前后插入两个空文本节点
+    hostInsert(fragmentStartAnchor, container, anchor)
+    hostInsert(fragmentEndAnchor, container, anchor)
+    // 再挂载子节点
+    mountChildren(n2.children, container, fragmentEndAnchor, parentComponent, parentSuspense, isSVG, optimized)
+  } else {
+    // 更新节点
+  }
+}
+```
+
+我们只分析挂载子节点的过程，所以 n1 的值为 null，n2 就是我们前面创建的 vnode 节点，它的 children 是一个数组。
+
+processFragment 函数首先通过 hostInsert 在容器的前后插入两个空文本节点，然后在以尾文本节点作为参考锚点，通过 mountChildren 把 children 挂载到 container 容器中。
+
+至此，我们就完成了子组件插槽内容的渲染。可以看到，插槽的实现实际上就是一种延时渲染，把父组件中编写的插槽内容保存到一个对象上，并且把具体渲染 DOM 的代码用函数的方式封装，然后在子组件渲染的时候，根据插槽名在对象中找到对应的函数，然后执行这些函数做真正的渲染。
+
