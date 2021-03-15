@@ -128,6 +128,7 @@ export function initProps(
   if (isStateful) {
     // stateful
     // 有状态组件，响应式处理
+    // 是因为 props 在更新的过程中，只会修改最外层属性，所以用 shallowReactive 就足够了。
     instance.props = isSSR ? props : shallowReactive(props)
   } else {
     if (!options) {
@@ -142,7 +143,21 @@ export function initProps(
   // 普通属性赋值
   instance.attrs = attrs
 }
-
+/**
+ * @description
+ * 更新props
+ * updateProps 主要的目标就是把父组件渲染时求得的 props 新值，更新到子组件实例的 instance.props 中。
+ *
+ * 在编译阶段，我们除了捕获一些动态 vnode，也捕获了动态的 props，所以我们可以只去比对动态的 props 数据更新。
+ *
+ * 当然，如果不满足优化的条件，我们也可以通过 setFullProps 去全量比对更新 props，并且，由于新的 props 可能是动态的，因此会把那些不在新 props 中但存在于旧 props 中的值设置为 undefined。
+ *
+ *
+ * @param instance
+ * @param rawProps
+ * @param rawPrevProps
+ * @param optimized
+ */
 export function updateProps(
   instance: ComponentInternalInstance,
   rawProps: Data | null,
@@ -159,6 +174,7 @@ export function updateProps(
   const { 0: options } = normalizePropsOptions(rawOptions)
 
   if ((optimized || patchFlag > 0) && !(patchFlag & PatchFlags.FULL_PROPS)) {
+     // 只更新动态 props 节点
     if (patchFlag & PatchFlags.PROPS) {
       // Compiler-generated props & no keys change, just set the updated
       // the props.
@@ -188,10 +204,12 @@ export function updateProps(
     }
   } else {
     // full props update.
+    // 全量 props 更新
     setFullProps(instance, rawProps, props, attrs)
     // in case of dynamic props, check if we need to delete keys from
     // the props object
     let kebabKey: string
+    // 因为新的 props 是动态的，把那些不在新的 props 中但存在于旧的 props 中的值设置为 undefined
     for (const key in rawCurrentProps) {
       if (
         !rawProps ||
