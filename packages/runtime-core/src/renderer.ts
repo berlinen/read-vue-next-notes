@@ -729,9 +729,11 @@ function baseCreateRenderer(
   /**
    * @description
    *  更新元素
-   * 1 更新 props 2 更新子节点
+   * 1 更新 props
+   * 2 更新子节点
    * 1 更新 props => patchProps 更新Dom节点的class style event others dom propertys
    * 2 更新子节点 children => patchChildren
+   * 如果这个 vnode 是一个 Block vnode，那么我们不用去通过 patchChildren 全量比对，只需要通过 patchBlockChildren 去比对并更新 Block 中的动态子节点即可。
    * @param n1
    * @param n2
    * @param parentComponent
@@ -881,7 +883,20 @@ function baseCreateRenderer(
       }, parentSuspense)
     }
   }
-
+/**
+ * @description
+ * 比对动态子节点
+ *
+ * patchBlockChildren 的实现很简单，遍历新的动态子节点数组，拿到对应的新旧动态子节点，并执行 patch 更新子节点即可。
+ *
+ * 更新的复杂度就变成和动态节点的数量正相关，而不与模板大小正相关，如果一个模板的动静比越低，那么性能优化的效果就越明显。
+ * @param oldChildren
+ * @param newChildren
+ * @param fallbackContainer
+ * @param parentComponent
+ * @param parentSuspense
+ * @param isSVG
+ */
   // The fast path for blocks.
   const patchBlockChildren: PatchBlockChildrenFn = (
     oldChildren,
@@ -895,18 +910,23 @@ function baseCreateRenderer(
       const oldVNode = oldChildren[i]
       const newVNode = newChildren[i]
       // Determine the container (parent element) for the patch.
+      // 确定待更新节点的容器
       const container =
         // - In the case of a Fragment, we need to provide the actual parent
         // of the Fragment itself so it can move its children.
+        // 对于 Fragment，我们需要提供正确的父容器
         oldVNode.type === Fragment ||
         // - In the case of different nodes, there is going to be a replacement
         // which also requires the correct parent container
+        // 在不同节点的情况下，将有一个替换节点，我们也需要正确的父容器
         !isSameVNodeType(oldVNode, newVNode) ||
         // - In the case of a component, it could contain anything.
+        // 组件的情况，我们也需要提供一个父容器
         oldVNode.shapeFlag & ShapeFlags.COMPONENT
           ? hostParentNode(oldVNode.el!)!
           : // In other cases, the parent container is not actually used so we
             // just pass the block element here to avoid a DOM parentNode call.
+            // 在其他情况下，父容器实际上并没有被使用，所以这里只传递 Block 元素即可
             fallbackContainer
       patch(
         oldVNode,

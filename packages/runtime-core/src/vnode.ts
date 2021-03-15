@@ -144,6 +144,16 @@ let currentBlock: VNode[] | null = null
 //
 // disableTracking is true when creating a fragment block, since a fragment
 // always diffs its children.
+/**
+ * @desc
+ * Vue.js 3.0 在运行时设计了一个 blockStack 和 currentBlock，其中 blockStack 表示一个 Block Tree，因为要考虑嵌套 Block 的情况，而currentBlock 表示当前的 Block。
+ * openBlock 的实现很简单，往当前 blockStack push 一个新的 Block，作为 currentBlock。
+ *
+ * 那么设计 Block 的目的是什么呢？主要就是收集动态的 vnode 的节点，这样才能在 patch 阶段只比对这些动态 vnode 节点，避免不必要的静态节点的比对，优化了性能。
+ *
+ * 那么动态 vnode 节点是什么时候被收集的呢？其实是在 createVNode 阶段，
+ * @param disableTracking
+ */
 export function openBlock(disableTracking = false) {
   blockStack.push((currentBlock = disableTracking ? null : []))
 }
@@ -170,6 +180,28 @@ export function setBlockTracking(value: number) {
 // Create a block root vnode. Takes the same exact arguments as `createVNode`.
 // A block root keeps track of dynamic nodes within the block in the
 // `dynamicChildren` array.
+/**
+ * @ desc
+ * 创建动态节点
+ * \，createBlock 函数的第三个参数是 children，这些 children 中的元素也是经过 createVNode 创建的，显然一个函数的调用需要先去执行参数的计算，也就是优先去创建子节点的 vnode，然后才会执行父节点的 createBlock 或者是 createVNode。\
+ *
+ * 所以在父节点的 createBlock 函数执行前，子节点就已经通过 createVNode 创建了对应的 vnode ，
+ *
+ * 再回到 createBlock 函数内部，这个时候你要明白动态子节点已经被收集到 currentBlock 中了。
+ *
+ * 1. 函数首先会执行 createVNode 创建一个 vnode 节点，注意最后一个参数是 true，这表明它是一个 Block node，所以就不会把自身当作一个动态 vnode 收集到 currentBlock 中。
+ *
+ * 2. 收集动态子节点的 currentBlock 保留到当前的 Block vnode 的 dynamicChildren 中，为后续 patch 过程访问这些动态子节点所用。
+ *
+ * 3. 当前 Block 恢复到父 Block，如果父 Block 存在的话，则把当前这个 Block node 作为动态节点添加到父 Block 中。
+ *
+ * Block Tree 的构造过程我们搞清楚了，那么接下来我们就来看它在 patch 阶段具体是如何工作的。
+ * @param type
+ * @param props
+ * @param children
+ * @param patchFlag
+ * @param dynamicProps
+ */
 export function createBlock(
   type: VNodeTypes | ClassComponent,
   props?: { [key: string]: any } | null,
@@ -182,12 +214,15 @@ export function createBlock(
   const vnode = createVNode(type, props, children, patchFlag, dynamicProps)
   shouldTrack++
   // save current block children on the block vnode
+  // 在 vnode 上保留当前 Block 收集的动态子节点
   vnode.dynamicChildren = currentBlock || EMPTY_ARR
   // close block
   blockStack.pop()
+  // 当前 Block 恢复到父 Block
   currentBlock = blockStack[blockStack.length - 1] || null
   // a block is always going to be patched, so track it as a child of its
   // parent block
+  // 节点本身作为父 Block 收集的子节点
   if (currentBlock) {
     currentBlock.push(vnode)
   }
@@ -239,13 +274,26 @@ const createVNodeWithArgsTransform = (
 }
 
 export const InternalObjectKey = `__vInternal`
-
+/**
+ * @desc 创建虚拟节点
+ */
 export const createVNode = (__DEV__
   ? createVNodeWithArgsTransform
   : _createVNode) as typeof _createVNode
-
+  createBlock
 /**
  * @desc 对props做标准化处理，对vnode的类型信息编码，标准化子节点children
+ *  1 处理 props 相关逻辑，标准化 class 和 style
+    2 对 vnode 类型信息编码
+    3 创建 vnode 对象
+    4 标准化子节点，把不同数据类型的 children 转成数组或者文本类型。
+    5 添加动态 vnode 节点到 currentBlock 中
+
+    这里会判断 vnode 是不是一个动态节点，如果是则把它添加到 currentBlock 中，这就是动态 vnode 节点的收集过程。
+
+    createBlock 实现
+
+
  * @param type
  * @param props
  * @param children
@@ -350,6 +398,8 @@ function _createVNode(
   // component nodes also should always be patched, because even if the
   // component doesn't need to update, it needs to persist the instance on to
   // the next vnode so that it can be properly unmounted later.
+
+  // 添加动态 vnode 节点到 currentBlock 中
   if (
     shouldTrack > 0 &&
     currentBlock &&
@@ -413,7 +463,36 @@ export function createTextVNode(text: string = ' ', flag: number = 0): VNode {
 export function createStaticVNode(content: string): VNode {
   return createVNode(Static, null, content)
 }
+/**
+ * @description
+ * Vue.js 3.0 在运行时设计了一个 blockStack 和 currentBlock，其中 blockStack 表示一个 Block Tree，因为要考虑嵌套 Block 的情况，而currentBlock 表示当前的 Block。
 
+openBlock 的实现很简单，往当前 blockStack push 一个新的 Block，作为 currentBlock。
+
+那么设计 Block 的目的是什么呢？主要就是收集动态的 vnode 的节点，这样才能在 patch 阶段只比对这些动态 vnode 节点，避免不必要的静态节点的比对，优化了性能。
+
+那么动态 vnode 节点是什么时候被收集的呢？其实是在 createVNode 阶段，
+
+为什么不把 openBlock 和 createBlock 放在一个函数中执行呢，像下面这样：
+
+function render() {
+  return (createBlock('div', null, []))
+}
+function createBlock(type, props, children, patchFlag, dynamicProps) {
+  openBlock()
+  // 创建 vnode
+  const vnode = createVNode(type, props, children, patchFlag, dynamicProps, true)
+  // ...
+  return vnode
+}
+
+这样是不行的！其中原因其实很简单，createBlock 函数的第三个参数是 children，这些 children 中的元素也是经过 createVNode 创建的，显然一个函数的调用需要先去执行参数的计算，也就是优先去创建子节点的 vnode，然后才会执行父节点的 createBlock 或者是 createVNode。
+
+所以在父节点的 createBlock 函数执行前，子节点就已经通过 createVNode 创建了对应的 vnode ，如果把 openBlock 的逻辑放在了 createBlock 中，就相当于在子节点创建后才创建 currentBlock，这样就不能正确地收集子节点中的动态 vnode 了。
+
+ * @param text
+ * @param asBlock
+ */
 export function createCommentVNode(
   text: string = '',
   // when used as the v-else branch, the comment node must be created as a
