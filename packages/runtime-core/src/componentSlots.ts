@@ -94,7 +94,12 @@ const normalizeVNodeSlots = (
   const normalized = normalizeSlotValue(children)
   instance.slots.default = () => normalized
 }
-
+/**
+ * @description
+ * 初始化slots
+ * @param instance
+ * @param children 前面传入的插槽对象数据，然后我们把它保留到 instance.slots 对象中，后续我们就可以从 instance.slots 拿到插槽的数据了。
+ */
 export const initSlots = (
   instance: ComponentInternalInstance,
   children: VNodeNormalizedChildren

@@ -9,7 +9,16 @@ import {
 } from '../vnode'
 import { PatchFlags } from '@vue/shared'
 import { warn } from '../warning'
-
+/**
+ * @description
+ * 渲染slot内容
+ * 1. 根据第二个参数 name 获取对应的插槽函数 slot
+ * 2. 通过 createBlock 创建了 vnode 节点，注意，它的类型是一个 Fragment，children 是执行 slot 插槽函数的返回值。
+ * @param slots 参数 slots 就是 instance.slots
+ * @param name
+ * @param props
+ * @param fallback
+ */
 export function renderSlot(
   slots: Slots,
   name: string,
