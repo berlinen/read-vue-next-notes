@@ -13,7 +13,32 @@ import {
 import { TransformContext } from '../transform'
 import { PatchFlags, isString, isSymbol } from '@vue/shared'
 import { isSlotOutlet, findProp } from '../utils'
+/**
+ * @description
+ * 它的创建是在 render 函数外部执行的。
+这样做的好处是，不用每次在 render 阶段都执行一次 createVNode 创建 vnode 对象，直接用之前在内存中创建好的 vnode 即可。
 
+那么为什么叫静态提升呢？
+
+因为这些静态节点不依赖动态数据，一旦创建了就不会改变，所以只有静态节点才能被提升到外部创建。
+ * 静态提升的实现：
+
+ * hoistStatic 主要就是从根节点开始，通过递归的方式去遍历节点，只有普通元素和文本节点才能被静态提升，所以针对这些节点，这里通过 getStaticType 去获取静态类型，如果节点是一个元素类型，getStaticType 内部还会递归判断它的子节点的静态类型。
+
+ 虽然有的节点包含一些动态子节点，但它本身的静态属性还是可以被静态提升的。
+
+ 如果 getStaticType 返回的 staticType 的值是 2，则表明它是一个运行时常量，由于它的值在运行时才能被确定，所以是不能静态提升的。
+
+ createRootCodegen 创建根节点的代码生成节
+
+ createRootCodegen 做的事情很简单，就是为 root 这个虚拟的 AST 根节点创建一个代码生成节点，如果 root 的子节点 children 是单个元素节点，则将其转换成一个 Block，把这个 child 的 codegenNode 赋值给 root 的 codegenNode。
+
+ 如果 root 的子节点 children 是多个节点，则返回一个 fragement 的代码生成节点，并赋值给 root 的 codegenNode。、、、、
+
+ 这里，创建 codegenNode 就是为了后续生成代码时使用。
+ * @param root
+ * @param context
+ */
 export function hoistStatic(root: RootNode, context: TransformContext) {
   walk(
     root.children,
